@@ -140,6 +140,7 @@ export const insertInPersonAppointmentBase = async (
   seedDataString = seedDataString.replace(/\{\{date\}\}/g, DateTime.now().toUTC().toFormat('yyyy-MM-dd'));
 
   const hydratedFastSeedJSON = JSON.parse(seedDataString);
+  console.log('Hydrated fast seed JSON:', Object.keys(hydratedFastSeedJSON).length);
 
   const createdResources =
     (
@@ -176,6 +177,7 @@ export const insertInPersonAppointmentBase = async (
     ).entry
       ?.map((entry) => entry.resource)
       .filter((entry) => entry !== undefined) ?? [];
+  console.log('Created resources:', createdResources.length);
 
   return {
     patient: createdResources.find((resource) => resource!.resourceType === 'Patient') as Patient,
