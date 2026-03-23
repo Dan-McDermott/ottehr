@@ -140,43 +140,41 @@ export const insertInPersonAppointmentBase = async (
   seedDataString = seedDataString.replace(/\{\{date\}\}/g, DateTime.now().toUTC().toFormat('yyyy-MM-dd'));
 
   const hydratedFastSeedJSON = JSON.parse(seedDataString);
-  console.log('Hydrated fast seed JSON:', Object.keys(hydratedFastSeedJSON).length);
+  console.log('Hydrated fast seed JSON:', Object.keys(hydratedFastSeedJSON.entry).length);
 
-  const createdResources =
-    (
-      await oystehr.fhir.transaction<
-        | Patient
-        | RelatedPerson
-        | Person
-        | Appointment
-        | Encounter
-        | Slot
-        | List
-        | Consent
-        | DocumentReference
-        | QuestionnaireResponse
-        | ServiceRequest
-        | ClinicalImpression
-      >({
-        requests: hydratedFastSeedJSON.entry.map((entry: any): BatchInputPostRequest<FhirResource> => {
-          if (entry.request.method !== 'POST') {
-            throw new Error('Only POST method is supported in fast mode');
-          }
-          let resource: FhirResource = entry.resource;
-          if (resource.resourceType === 'Appointment') {
-            resource = addProcessIdMetaTagToResource(resource, processId);
-          }
-          return {
-            method: entry.request.method,
-            url: entry.request.url,
-            fullUrl: entry.fullUrl,
-            resource: entry.resource,
-          };
-        }),
-      })
-    ).entry
-      ?.map((entry) => entry.resource)
-      .filter((entry) => entry !== undefined) ?? [];
+  const txResult = await oystehr.fhir.transaction<
+    | Patient
+    | RelatedPerson
+    | Person
+    | Appointment
+    | Encounter
+    | Slot
+    | List
+    | Consent
+    | DocumentReference
+    | QuestionnaireResponse
+    | ServiceRequest
+    | ClinicalImpression
+  >({
+    requests: hydratedFastSeedJSON.entry.map((entry: any): BatchInputPostRequest<FhirResource> => {
+      if (entry.request.method !== 'POST') {
+        throw new Error('Only POST method is supported in fast mode');
+      }
+      let resource: FhirResource = entry.resource;
+      if (resource.resourceType === 'Appointment') {
+        resource = addProcessIdMetaTagToResource(resource, processId);
+      }
+      return {
+        method: entry.request.method,
+        url: entry.request.url,
+        fullUrl: entry.fullUrl,
+        resource: entry.resource,
+      };
+    }),
+  });
+  const responses = txResult.entry?.map((entry) => entry.response).filter((entry) => entry !== undefined) ?? [];
+  console.log('Transaction responses:', responses);
+  const createdResources = txResult.entry?.map((entry) => entry.resource).filter((entry) => entry !== undefined) ?? [];
   console.log('Created resources:', createdResources.length);
 
   return {

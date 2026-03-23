@@ -19,7 +19,7 @@ import {
 
 let baseResources: InsertFullAppointmentDataBaseResult;
 
-describe('chart-data integration tests', () => {
+describe.only('chart-data integration tests', () => {
   let oystehrLocalZambdas: Oystehr;
   let cleanup: () => Promise<void>;
 
