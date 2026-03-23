@@ -13,6 +13,7 @@ import {
 import {
   InsertFullAppointmentDataBaseResult,
   insertInPersonAppointmentBase,
+  IntegrationTestSetupResult,
   setupIntegrationTest,
 } from '../helpers/integration-test-seed-data-setup';
 
@@ -23,9 +24,20 @@ describe('chart-data integration tests', () => {
   let cleanup: () => Promise<void>;
 
   beforeAll(async () => {
-    const setup = await setupIntegrationTest('chart-data.test.ts', M2MClientMockType.provider);
+    let setup: IntegrationTestSetupResult;
+    try {
+      setup = await setupIntegrationTest('chart-data.test.ts', M2MClientMockType.provider);
+    } catch (error) {
+      console.error('Error setting up integration test:', error);
+      throw error;
+    }
     oystehrLocalZambdas = setup.oystehrTestUserM2M;
-    baseResources = await insertInPersonAppointmentBase(setup.oystehr, setup.processId);
+    try {
+      baseResources = await insertInPersonAppointmentBase(setup.oystehr, setup.processId);
+    } catch (error) {
+      console.error('Error inserting in-person appointment base:', error);
+      throw error;
+    }
     cleanup = setup.cleanup;
   }, 60_000);
 
