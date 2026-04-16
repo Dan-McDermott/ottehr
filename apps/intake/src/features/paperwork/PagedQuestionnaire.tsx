@@ -329,9 +329,9 @@ const PaperworkFormRoot: FC<PaperworkRootInput> = ({
       ...baseStuff,
       submitDisabled: baseStuff.loading || isLoading || saveButtonDisabled,
       // only use the continue label with inperson paperwork
-      submitLabel: questionnaireResponse?.questionnaire?.includes('intake-paperwork-inperson')
-        ? continueLabel
-        : undefined,
+      submitLabel:
+        baseStuff.submitLabel ??
+        (questionnaireResponse?.questionnaire?.includes('intake-paperwork-inperson') ? continueLabel : undefined),
       onSubmit: submitHandler,
     };
   }, [continueLabel, controlButtons, isLoading, questionnaireResponse, saveButtonDisabled, submitHandler]);

@@ -27,6 +27,7 @@ import EditVirtualLocationPage from './features/visits/telemed/components/admin/
 import GlobalTemplateDetailPage from './features/visits/telemed/components/admin/GlobalTemplateDetailPage';
 import AdminAddInHouseLab from './features/visits/telemed/components/admin/in-house-labs/AdminAddInHouseLab';
 import AdminInHouseLabDetails from './features/visits/telemed/components/admin/in-house-labs/AdminInHouseLabDetails';
+import { QuestionnaireBuilderPage } from './features/visits/telemed/components/admin/questionnaires/QuestionnaireBuilderPage';
 import { useApiClients } from './hooks/useAppClients';
 import useEvolveUser from './hooks/useEvolveUser';
 import AddEmployeePage from './pages/AddEmployeePage';
@@ -243,6 +244,8 @@ function App(): ReactElement {
                   <Route path={`${PAYMENT_LOCATIONS_URL}/:id`} element={<PaymentLocationDetailPage />} />
                   <Route path="/admin/in-house-labs/add" element={<AdminAddInHouseLab />} />
                   <Route path="/admin/in-house-labs/:activityDefinitionId" element={<AdminInHouseLabDetails />} />
+                  <Route path="/admin/questionnaires/new" element={<QuestionnaireBuilderPage />} />
+                  <Route path="/admin/questionnaires/:questionnaireId" element={<QuestionnaireBuilderPage />} />
                   {/** telemed */}
                   <Route
                     path="/telemed/appointments/:id"
