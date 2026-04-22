@@ -3,6 +3,37 @@
 import * as fs from 'fs';
 import * as path from 'path';
 
+const YELLOW = '\x1b[33m';
+const NC = '\x1b[0m';
+
+function isSymlink(filePath: string): boolean {
+  try {
+    return fs.lstatSync(filePath).isSymbolicLink();
+  } catch {
+    return false;
+  }
+}
+
+function checkForSymlinks(targetPath: string): boolean {
+  if (!fs.existsSync(targetPath)) return false;
+  if (isSymlink(targetPath)) return true;
+
+  try {
+    const stat = fs.statSync(targetPath);
+    if (stat.isDirectory()) {
+      const entries = fs.readdirSync(targetPath);
+      for (const entry of entries) {
+        if (checkForSymlinks(path.join(targetPath, entry))) {
+          return true;
+        }
+      }
+    }
+  } catch {
+    return false;
+  }
+  return false;
+}
+
 function checkDirectory(dirPath: string): boolean {
   try {
     return fs.existsSync(dirPath) && fs.statSync(dirPath).isDirectory();
@@ -87,10 +118,41 @@ function populate(environment: string, project?: string): void {
   const secretsPath = path.join(repoRoot, 'secrets');
   const paths = getFilePaths(environment, project);
 
-  if (!checkDirectory(secretsPath)) {
-    console.error('Error: secrets directory not found in repository root');
+  const symlinkTargets = [
+    paths.zambdas.target,
+    paths.zambdas.assets.target,
+    paths.ehr.public.target,
+    paths.patientPortal.public.target,
+    paths.terraform.target,
+  ];
+
+  const hasSymlinks = symlinkTargets.some(checkForSymlinks);
+  if (hasSymlinks) {
+    console.log(`${YELLOW}╔══════════════════════════════════════════════════════════════╗`);
+    console.log(`║  SYMLINK CONFIGURATION DETECTED                                ║`);
+    console.log(`╚══════════════════════════════════════════════════════════════╝${NC}`);
+    console.log(`\nThis repository is using the new symlink-based configuration system.`);
+    console.log(`The legacy populate command may interfere with symlinks.\n`);
+    console.log(`Recommended: Use the new ./dev CLI instead:`);
+    console.log(`  ./dev use ottehr        # Use default configuration`);
+    console.log(`  ./dev use <customer>    # Use customer-specific configuration`);
+    console.log(`  ./dev who               # Check current configuration\n`);
+    console.log(`To proceed anyway (not recommended), remove symlinks first.\n`);
     process.exit(1);
   }
+
+  if (!checkDirectory(secretsPath)) {
+    console.error('Error: secrets directory not found in repository root');
+    console.error('\nThis script expects secrets at ./secrets/');
+    console.error('For the new symlink-based system, use:');
+    console.error('  ./dev clone secrets');
+    console.error('  ./dev use <profile>');
+    process.exit(1);
+  }
+
+  console.log(`${YELLOW}WARNING: This script uses the legacy copy-based approach.${NC}`);
+  console.log(`Consider using the new symlink-based system:`);
+  console.log(`  ./dev clone secrets && ./dev use ${project || 'ottehr'}\n`);
 
   console.log('\n=== Populating environment-specific secrets ===');
 

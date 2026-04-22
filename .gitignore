@@ -1,39 +1,73 @@
-secrets
+# === Core ignores ===
 node_modules
 coverage
 .eslintcache
 build
 .DS_Store
 .idea
-.env
 .serverlessrc
 out.log
+.turbo
+dist
 
 # Packages for zambda deployment
 .dist
 
-.turbo
+# Test results
 .overlay-project
 test-results/
 playwright/
 playwright-report/
 playwright-report-login/
 test-results-login/
-
 playwright/.cache/
 
-dist
+# Build artifacts
 packages/ui-components/dist/*
+**/vite.config.ts.timestamp-*.mjs
+**/*.tsbuildinfo
 
 # Sentry Config File
 .env.sentry-build-plugin
-.idea
 
-**/vite.config.ts.timestamp-*.mjs
-**/*.tsbuildinfo
-**/ottehr-secrets/
-config/sendgrid/*
-
+# Terraform
 terraform.json
+
+# Test utilities
 .test-appointment-id
 .playwright-mcp
+
+# === Config system (symlink-based) ===
+configs/secrets/
+
+# Symlink destination directories - IaC config
+config/oystehr/
+config/oystehr-core/
+config/.env/
+config/sendgrid/
+
+# Symlink destination - ottehr-config module
+packages/utils/lib/ottehr-config/
+
+# Apps public assets (symlinked for branding)
+apps/ehr/public/
+apps/intake/public/
+
+# Apps env (credentials from secrets)
+apps/ehr/env/
+!apps/ehr/env/.env.template-iac
+apps/intake/env/
+!apps/intake/env/.env.template-iac
+
+# Zambdas
+packages/zambdas/assets/
+packages/zambdas/.env/
+packages/zambdas/src/scripts/setup-default-locations.ts
+
+# Deploy (terraform configs from secrets)
+deploy/
+
+# Legacy (keeping for backwards compatibility)
+secrets
+.env
+**/ottehr-secrets/

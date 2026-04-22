@@ -50,6 +50,7 @@ on:
       - ".prettierignore"
       - "package.json"
       - "config/**"
+      - "configs/public/**"
   pull_request:
     branches: [main, develop, "release/**"]
     paths:
@@ -64,6 +65,7 @@ on:
       - ".prettierignore"
       - "package.json"
       - "config/**"
+      - "configs/public/**"
       - "deploy/**"
 
 env:
