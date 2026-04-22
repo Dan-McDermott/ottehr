@@ -74,7 +74,22 @@ cd ottehr
 
 ### Configure Your Environment
 
-Follow the instructions on setting up a new project in [`deploy/README.md`](/deploy/README.md#setting-up-a-new-project).
+Ottehr uses a symlink-based configuration system. To get started:
+
+```bash
+# Clone the secrets repository (internal developers)
+./dev clone secrets
+
+# Activate the default configuration
+./dev use ottehr
+
+# Or use an extended configuration profile
+./dev use <profile>
+```
+
+For detailed configuration options, see [`configs/README.md`](/configs/README.md).
+
+For new projects, follow the instructions in [`deploy/README.md`](/deploy/README.md#setting-up-a-new-project).
 
 ### Run the Application
 

@@ -2,6 +2,13 @@
 
 This directory contains scripts and Terraform configuration for deploying Ottehr.
 
+> **Note:** This directory contains symlinks managed by the configuration system.
+> Before deploying, ensure configuration is active:
+> ```bash
+> ./dev clone secrets && ./dev use <profile>
+> ```
+> See [`configs/README.md`](/configs/README.md) for details.
+
 ## Requirements
 
 ### Terraform
