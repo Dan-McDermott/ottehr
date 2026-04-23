@@ -28,6 +28,7 @@ function showUsage(): void {
   console.log('              Symlinks only: {workspace}.tfvars, {workspace}_*.tf');
   console.log('');
   console.log('Flags:');
+  console.log('  -c, --copy        Copy files instead of symlinks (useful for CI)');
   console.log('  -v, --verbose     Show detailed file list');
   console.log('');
   console.log('Available profiles:');
@@ -77,16 +78,17 @@ function cleanSymlinks(dirPath: string): number {
   return count;
 }
 
-interface SymlinkOptions {
+interface LinkOptions {
   filter?: (filename: string) => boolean;
+  copy?: boolean;
 }
 
-function symlinkDir(
+function linkDir(
   sourceDir: string,
   destDir: string,
   root: string,
   conflicts: string[],
-  options: SymlinkOptions = {}
+  options: LinkOptions = {}
 ): number {
   let count = 0;
   if (!fs.existsSync(sourceDir)) return count;
@@ -104,7 +106,7 @@ function symlinkDir(
 
     if (entry.isDirectory()) {
       ensureDir(destPath);
-      count += symlinkDir(sourcePath, destPath, root, conflicts, options);
+      count += linkDir(sourcePath, destPath, root, conflicts, options);
     } else {
       if (fs.existsSync(destPath)) {
         if (isSymlink(destPath)) {
@@ -118,8 +120,12 @@ function symlinkDir(
       }
 
       ensureDir(path.dirname(destPath));
-      const relativeTarget = path.relative(path.dirname(destPath), sourcePath);
-      fs.symlinkSync(relativeTarget, destPath);
+      if (options.copy) {
+        fs.copyFileSync(sourcePath, destPath);
+      } else {
+        const relativeTarget = path.relative(path.dirname(destPath), sourcePath);
+        fs.symlinkSync(relativeTarget, destPath);
+      }
       count++;
     }
   }
@@ -142,7 +148,7 @@ function createTerraformFilter(workspace: string): (filename: string) => boolean
   };
 }
 
-function applyConfig(profile: string, workspace: string, verbose: boolean): void {
+function applyConfig(profile: string, workspace: string, verbose: boolean, copy: boolean): void {
   const root = getProjectRoot();
   const publicDir = getPublicDir();
   const secretsDir = getSecretsDir();
@@ -162,7 +168,7 @@ function applyConfig(profile: string, workspace: string, verbose: boolean): void
   const wsLabel = workspace === 'local' ? '' : ` [${workspace}]`;
   header(`Switching to ${profile === 'ottehr' ? 'ottehr (default)' : profile}${wsLabel}`);
 
-  let totalSymlinks = 0;
+  let totalLinked = 0;
   let totalCleaned = 0;
   const allConflicts: string[] = [];
 
@@ -176,19 +182,22 @@ function applyConfig(profile: string, workspace: string, verbose: boolean): void
     totalCleaned += cleaned;
 
     const isTerraform = mapping.dest === 'deploy';
-    const options: SymlinkOptions = isTerraform ? { filter: createTerraformFilter(workspace) } : {};
+    const options: LinkOptions = {
+      copy,
+      ...(isTerraform && { filter: createTerraformFilter(workspace) }),
+    };
 
     if (mapping.publicSource) {
       const publicSourcePath = path.join(publicDir, mapping.publicSource);
       if (fs.existsSync(publicSourcePath)) {
-        totalSymlinks += symlinkDir(publicSourcePath, destPath, root, conflicts, options);
+        totalLinked += linkDir(publicSourcePath, destPath, root, conflicts, options);
       }
     }
 
     if (mapping.secretsSource) {
       const secretsSourcePath = path.join(profileSecretsDir, mapping.secretsSource);
       if (fs.existsSync(secretsSourcePath)) {
-        totalSymlinks += symlinkDir(secretsSourcePath, destPath, root, conflicts, options);
+        totalLinked += linkDir(secretsSourcePath, destPath, root, conflicts, options);
       }
     }
 
@@ -207,7 +216,7 @@ function applyConfig(profile: string, workspace: string, verbose: boolean): void
   }
 
   success(`Cleaned ${totalCleaned} old symlinks`);
-  success(`Created ${totalSymlinks} new symlinks`);
+  success(`Created ${totalLinked} ${copy ? 'copies' : 'symlinks'}`);
 
   info('Clearing caches...');
   const cacheDirs = [
@@ -239,7 +248,8 @@ function applyConfig(profile: string, workspace: string, verbose: boolean): void
 function main(): void {
   const rawArgs = process.argv.slice(2);
   const verbose = rawArgs.includes('-v') || rawArgs.includes('--verbose');
-  const args = rawArgs.filter(a => !['-v', '--verbose'].includes(a));
+  const copy = rawArgs.includes('-c') || rawArgs.includes('--copy');
+  const args = rawArgs.filter(a => !['-v', '--verbose', '-c', '--copy'].includes(a));
 
   if (args.length === 0 || args[0] === '--help') {
     showUsage();
@@ -260,7 +270,7 @@ function main(): void {
     process.exit(1);
   }
 
-  applyConfig(profile, workspace, verbose);
+  applyConfig(profile, workspace, verbose, copy);
 }
 
 main();

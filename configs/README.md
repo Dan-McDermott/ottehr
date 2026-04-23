@@ -66,6 +66,13 @@ This allows profiles to override specific files while inheriting defaults.
 - **profile** - Configuration profile from `configs/secrets/` (e.g., `ottehr`, `myprofile`)
 - **workspace** - Terraform workspace filter (default: `local`). Controls which `.tfvars` and `{workspace}_*.tf` files are symlinked
 
+### Flags
+
+- `-c, --copy` - Copy files instead of creating symlinks (useful for CI environments).
+
+  > **Note:** When using `--copy`, programmatic validation is not possible. Unlike symlinks, there is no way to know which configuration profile they came from.
+- `-v, --verbose` - Show detailed file list
+
 ### Terraform Integration
 
 When switching profiles:
