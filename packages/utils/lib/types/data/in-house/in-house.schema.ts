@@ -1,4 +1,3 @@
-import { ProcedureModifier } from 'candidhealth/api/index.js';
 import { z } from 'zod';
 import { REFLEX_TEST_CONDITION_LANGUAGES } from './in-house.constants';
 
@@ -104,14 +103,12 @@ const TestItemComponentSchema = z.discriminatedUnion('dataType', [
   StringComponentSchema,
 ]);
 
-const ProcedureModifierEnum = z.enum(Object.values(ProcedureModifier) as [string, ...string[]]);
-
 const CptCodeInHouseLabDefinitionSchema = z.object({
   code: nonEmptyString('CPT Code required'),
   modifier: z
     .array(
       z.object({
-        code: ProcedureModifierEnum,
+        code: nonEmptyString('Modifier code required'),
         display: nonEmptyString('Modifier display required'),
       })
     )

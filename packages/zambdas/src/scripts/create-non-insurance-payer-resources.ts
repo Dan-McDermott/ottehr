@@ -148,7 +148,7 @@ function generateFhirResources(payers: PayerData[]): FhirResourcesOutput {
       ],
       identifier: [
         {
-          system: 'https://api.joincandidhealth.com/api/non-insurance-payers/v1/response/non_insurance_payer_id',
+          system: 'https://fhir.ottehr.com/identifier/non-insurance-payer-id',
           value: `#{var/${payer.moniker}}`,
         },
       ],

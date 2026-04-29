@@ -18,10 +18,6 @@ output "app_patient_portal_client_id" {
   value = oystehr_application.PATIENT_PORTAL.client_id
 }
 
-output "stripe_public_key" {
-  value = oystehr_secret.STRIPE_PUBLIC_KEY.value
-}
-
 output "sentry_auth_token" {
   value = oystehr_secret.SENTRY_AUTH_TOKEN.value
 }

@@ -5,7 +5,6 @@ import Oystehr, {
   BatchInputPutRequest,
   BatchInputRequest,
 } from '@oystehr/sdk';
-import { NetworkType } from 'candidhealth/api/resources/preEncounter/resources/coverages/resources/v1';
 import { randomUUID } from 'crypto';
 import { Operation, RemoveOperation } from 'fast-json-patch';
 import {
@@ -38,11 +37,9 @@ import {
 } from 'fhir/r4b';
 import _ from 'lodash';
 import { DateTime } from 'luxon';
-import Stripe from 'stripe';
 import {
   ATTORNEY_FIRM_EXTENSION_URL,
   buildExtensionObject,
-  CANDID_PLAN_TYPE_SYSTEM,
   codeableConcept,
   ConsentSigner,
   consolidateOperations,
@@ -67,7 +64,6 @@ import {
   flattenIntakeQuestionnaireItems,
   flattenItems,
   formatPhoneNumber,
-  getAllStripeCustomerAccountPairs,
   getArrayInfo,
   getConsentAndRelatedDocRefsForAppointment,
   getConsentFormsForLocation,
@@ -82,12 +78,13 @@ import {
   getPhoneNumberForIndividual,
   getSecret,
   getTaxID,
-  INSURANCE_CANDID_PLAN_TYPE_CODES,
   INSURANCE_CARD_BACK_2_ID,
   INSURANCE_CARD_BACK_ID,
   INSURANCE_CARD_CODE,
   INSURANCE_CARD_FRONT_2_ID,
   INSURANCE_CARD_FRONT_ID,
+  INSURANCE_PLAN_TYPE_CODES,
+  INSURANCE_PLAN_TYPE_SYSTEM,
   IntakeQuestionnaireItem,
   isFieldExplicitlyCleared,
   isoStringFromDateComponents,
@@ -1877,7 +1874,7 @@ const buildEmergencyContactAddress = (contact: EmergencyContact): Address | unde
 interface InsuranceDetails {
   org: Organization;
   additionalInformation?: string;
-  typeCode?: NetworkType;
+  typeCode?: string;
 }
 function getInsuranceDetailsFromAnswers(
   answers: QuestionnaireResponseItem[],
@@ -1893,9 +1890,9 @@ function getInsuranceDetailsFromAnswers(
   if (!org) return undefined;
 
   const qType = answers.find((item) => item.linkId === `insurance-plan-type${suffix}`)?.answer?.[0]?.valueString;
-  let typeCode: NetworkType | undefined = undefined;
-  if (qType && INSURANCE_CANDID_PLAN_TYPE_CODES.includes(qType)) {
-    typeCode = qType as NetworkType;
+  let typeCode: string | undefined = undefined;
+  if (qType && INSURANCE_PLAN_TYPE_CODES.includes(qType)) {
+    typeCode = qType;
   }
 
   const additionalInformation = answers.find((item) => item.linkId === `insurance-additional-information${suffix}`)
@@ -2298,7 +2295,7 @@ interface CreateCoverageResourceInput {
     org: Organization;
     policyHolder: PolicyHolder;
     additionalInformation?: string;
-    typeCode?: NetworkType;
+    typeCode?: string;
   };
 }
 const createCoverageResource = (input: CreateCoverageResourceInput): Coverage => {
@@ -2357,7 +2354,7 @@ const createCoverageResource = (input: CreateCoverageResourceInput): Coverage =>
       type: 'Patient',
       reference: `Patient/${patientId}`,
     },
-    type: typeCode !== undefined ? { coding: [{ system: CANDID_PLAN_TYPE_SYSTEM, code: typeCode }] } : undefined,
+    type: typeCode !== undefined ? { coding: [{ system: INSURANCE_PLAN_TYPE_SYSTEM, code: typeCode }] } : undefined,
     payor: [{ reference: `Organization/${org.id}` }],
     subscriberId: policyHolder.memberId,
     relationship: getPolicyHolderRelationshipCodeableConcept(policyHolder.relationship),
@@ -2376,7 +2373,7 @@ const createCoverageResource = (input: CreateCoverageResourceInput): Coverage =>
       },
     ],
   };
-  const coverageTypeCoding = VALUE_SETS.insuranceTypeOptions.find((planType) => planType.candidCode === typeCode)
+  const coverageTypeCoding = VALUE_SETS.insuranceTypeOptions.find((planType) => planType.planCode === typeCode)
     ?.coverageCoding;
   if (coverageTypeCoding) coverage.type?.coding?.push(coverageTypeCoding);
 
@@ -2849,7 +2846,7 @@ export const getAccountOperations = (input: GetAccountOperationsInput): GetAccou
             type: 'Patient',
             reference: `Patient/${patient.id}`,
           },
-          type: { coding: [{ system: CANDID_PLAN_TYPE_SYSTEM, code: 'WC' }] },
+          type: { coding: [{ system: INSURANCE_PLAN_TYPE_SYSTEM, code: 'WC' }] },
           payor: [{ reference: `Organization/${workersCompInsuranceOrg?.id}` }],
           relationship: {
             coding: [
@@ -4059,34 +4056,6 @@ export const updatePatientAccountFromQuestionnaire = async (
   } catch (error: unknown) {
     console.log(`Failed to update Account: ${JSON.stringify(error)}`);
     throw error;
-  }
-};
-
-interface UpdateStripeCustomerInput {
-  account: Account;
-  guarantorResource: RelatedPerson | Patient;
-  stripeClient: Stripe;
-}
-export const updateStripeCustomer = async (input: UpdateStripeCustomerInput): Promise<void> => {
-  const { guarantorResource, account, stripeClient } = input;
-  console.log('updating Stripe customer for account', account.id);
-  console.log('guarantor resource:', `${guarantorResource?.resourceType}/${guarantorResource?.id}`);
-
-  const email = getEmailForIndividual(guarantorResource);
-  const name = getFullName(guarantorResource);
-  const phone = getPhoneNumberForIndividual(guarantorResource);
-
-  const stripeCustomerAccountPairs = getAllStripeCustomerAccountPairs(account);
-  for (const pair of stripeCustomerAccountPairs) {
-    await stripeClient.customers.update(
-      pair.customerId,
-      {
-        email,
-        name,
-        phone,
-      },
-      { stripeAccount: pair.stripeAccount }
-    );
   }
 };
 

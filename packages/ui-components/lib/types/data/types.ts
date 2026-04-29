@@ -7,7 +7,6 @@ export type GetOystehrAPIParams = {
   checkInZambdaID?: string;
   createAppointmentZambdaID?: string;
   createPaperworkZambdaID?: string;
-  deletePaymentMethodZambdaID?: string;
   getAppointmentsZambdaID?: string;
   getPastVisitsZambdaID?: string;
   getEligibilityZambdaID?: string;
@@ -16,15 +15,11 @@ export type GetOystehrAPIParams = {
   getScheduleZambdaID?: string;
   getPaperworkZambdaID?: string;
   getPatientsZambdaID?: string;
-  getPatientBalancesZambdaID?: string;
-  getPaymentMethodsZambdaID?: string;
   getPresignedFileURLZambdaID?: string;
   getTelemedLocationsZambdaID?: string;
   getWaitStatusZambdaID?: string;
   isAppLocal?: 'true' | 'false';
   joinCallZambdaID?: string;
-  setDefaultPaymentMethodZambdaID?: string;
-  setupPaymentMethodZambdaID?: string;
   updateAppointmentZambdaID?: string;
   patchPaperworkZambdaID?: string;
   submitPaperworkZambdaID?: string;

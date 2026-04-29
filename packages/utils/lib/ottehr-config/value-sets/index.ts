@@ -1,16 +1,12 @@
 // cSpell:ignore AUTOPOL, Champus, LIAB, MCPOL, medib, PUBLICPOL, WCBPOL
-import { NetworkType } from 'candidhealth/api/index.js';
-import { type InsurancePlanType as BaseInsurancePlanType, type ValueSetsConfig } from 'config-types';
+import { type InsurancePlanType, type ValueSetsConfig } from 'config-types';
 import { deepFreezeObject } from '../../utils/objects';
 
-// Extend InsurancePlanType to use the specific Candid NetworkType
-export interface InsurancePlanType extends Omit<BaseInsurancePlanType, 'candidCode'> {
-  candidCode: NetworkType;
-}
+export type { InsurancePlanType };
 
 export const insuranceTypeOptionsData = [
   {
-    candidCode: '09',
+    planCode: '09',
     label: 'Self Pay',
     coverageCoding: {
       system: 'http://terminology.hl7.org/CodeSystem/coverage-selfpay',
@@ -18,7 +14,7 @@ export const insuranceTypeOptionsData = [
     },
   },
   {
-    candidCode: '11',
+    planCode: '11',
     label: 'Other Non-Federal Programs',
     coverageCoding: {
       system: 'http://terminology.hl7.org/CodeSystem/v3-ActCode',
@@ -26,7 +22,7 @@ export const insuranceTypeOptionsData = [
     },
   },
   {
-    candidCode: '12',
+    planCode: '12',
     label: 'PPO',
     coverageCoding: {
       system: 'http://terminology.hl7.org/CodeSystem/v3-ActCode',
@@ -34,7 +30,7 @@ export const insuranceTypeOptionsData = [
     },
   },
   {
-    candidCode: '13',
+    planCode: '13',
     label: 'POS',
     coverageCoding: {
       system: 'http://terminology.hl7.org/CodeSystem/v3-ActCode',
@@ -42,7 +38,7 @@ export const insuranceTypeOptionsData = [
     },
   },
   {
-    candidCode: '14',
+    planCode: '14',
     label: 'EPO',
     coverageCoding: {
       system: 'https://nahdo.org/sopt',
@@ -51,7 +47,7 @@ export const insuranceTypeOptionsData = [
     },
   },
   {
-    candidCode: '15',
+    planCode: '15',
     label: 'Indemnity Insurance',
     coverageCoding: {
       system: 'http://terminology.hl7.org/CodeSystem/v3-ActCode',
@@ -60,7 +56,7 @@ export const insuranceTypeOptionsData = [
     },
   },
   {
-    candidCode: '16',
+    planCode: '16',
     label: 'HMO Medicare Risk',
     coverageCoding: {
       system: 'http://terminology.hl7.org/CodeSystem/v3-ActCode',
@@ -69,7 +65,7 @@ export const insuranceTypeOptionsData = [
     },
   },
   {
-    candidCode: '17',
+    planCode: '17',
     label: 'DMO',
     coverageCoding: {
       system: 'http://nucc.org/provider-taxonomy',
@@ -78,7 +74,7 @@ export const insuranceTypeOptionsData = [
     },
   },
   {
-    candidCode: 'AM',
+    planCode: 'AM',
     label: 'Auto',
     coverageCoding: {
       system: 'http://terminology.hl7.org/CodeSystem/v3-ActCode',
@@ -86,11 +82,11 @@ export const insuranceTypeOptionsData = [
     },
   },
   {
-    candidCode: 'BL',
+    planCode: 'BL',
     label: 'BlueCross BlueShield',
   },
   {
-    candidCode: 'CH',
+    planCode: 'CH',
     label: 'Champus',
     coverageCoding: {
       system: 'http://terminology.hl7.org/CodeSystem/v3-ActCode',
@@ -99,7 +95,7 @@ export const insuranceTypeOptionsData = [
     },
   },
   {
-    candidCode: 'CI',
+    planCode: 'CI',
     label: 'Commercial Insurance Co',
     coverageCoding: {
       system: 'http://terminology.hl7.org/CodeSystem/v3-ActCode',
@@ -108,7 +104,7 @@ export const insuranceTypeOptionsData = [
     },
   },
   {
-    candidCode: 'DS',
+    planCode: 'DS',
     label: 'Disability',
     coverageCoding: {
       system: 'http://terminology.hl7.org/CodeSystem/v3-ActCode',
@@ -116,7 +112,7 @@ export const insuranceTypeOptionsData = [
     },
   },
   {
-    candidCode: 'FI',
+    planCode: 'FI',
     label: 'Federal Employees',
     coverageCoding: {
       system: 'http://hl7.org/fhir/us/directory-attestation/CodeSystem/InsuranceProductTypeCS',
@@ -125,7 +121,7 @@ export const insuranceTypeOptionsData = [
     },
   },
   {
-    candidCode: 'HM',
+    planCode: 'HM',
     label: 'HMO',
     coverageCoding: {
       system: 'http://terminology.hl7.org/CodeSystem/v3-ActCode',
@@ -133,7 +129,7 @@ export const insuranceTypeOptionsData = [
     },
   },
   {
-    candidCode: 'LM',
+    planCode: 'LM',
     label: 'Liability',
     coverageCoding: {
       system: 'http://terminology.hl7.org/CodeSystem/v3-ActCode',
@@ -142,7 +138,7 @@ export const insuranceTypeOptionsData = [
     },
   },
   {
-    candidCode: 'MA',
+    planCode: 'MA',
     label: 'Medicare Part A',
     coverageCoding: {
       system: 'http://hl7.org/fhir/us/directory-attestation/CodeSystem/InsuranceProductTypeCS',
@@ -151,7 +147,7 @@ export const insuranceTypeOptionsData = [
     },
   },
   {
-    candidCode: 'MB',
+    planCode: 'MB',
     label: 'Medicare Part B',
     coverageCoding: {
       system: 'http://hl7.org/fhir/us/directory-attestation/CodeSystem/InsuranceProductTypeCS',
@@ -160,19 +156,19 @@ export const insuranceTypeOptionsData = [
     },
   },
   {
-    candidCode: 'MC',
+    planCode: 'MC',
     label: 'Medicaid',
   },
   {
-    candidCode: 'OF',
+    planCode: 'OF',
     label: 'Other Federal Program',
   },
   {
-    candidCode: 'TV',
+    planCode: 'TV',
     label: 'Title V',
   },
   {
-    candidCode: 'VA',
+    planCode: 'VA',
     label: 'Veterans Affairs Plan',
     coverageCoding: {
       system: 'http://hl7.org/fhir/us/directory-attestation/CodeSystem/InsuranceProductTypeCS',
@@ -181,7 +177,7 @@ export const insuranceTypeOptionsData = [
     },
   },
   {
-    candidCode: 'WC',
+    planCode: 'WC',
     label: 'Workers Comp Health Claim',
     coverageCoding: {
       system: 'http://terminology.hl7.org/CodeSystem/v3-ActCode',
@@ -189,7 +185,7 @@ export const insuranceTypeOptionsData = [
     },
   },
   {
-    candidCode: 'ZZ',
+    planCode: 'ZZ',
     label: 'Mutually Defined',
   },
 ];

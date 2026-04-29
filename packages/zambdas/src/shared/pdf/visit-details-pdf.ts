@@ -11,7 +11,6 @@ import {
   composeInsuranceData,
   composePatientData,
   composePatientDetailsData,
-  composePatientPaymentsData,
   composePharmacyData,
   composeResponsiblePartyData,
   composeVisitData,
@@ -24,7 +23,6 @@ import {
   createPatientDetailsSection,
   createPatientHeader,
   createPatientInfoSection,
-  createPatientPaymentsSection,
   createPharmacyFormsSection,
   createPrimaryInsuranceSection,
   createResponsiblePartySection,
@@ -52,7 +50,6 @@ const composeVisitDetailsData: DataComposer<VisitDetailsInput, VisitDetailsData>
     documents,
     consents,
     questionnaireResponse,
-    payments,
   } = input;
 
   return {
@@ -69,7 +66,6 @@ const composeVisitDetailsData: DataComposer<VisitDetailsInput, VisitDetailsData>
     emergencyContact: composeEmergencyContactData({ emergencyContactResource }),
     attorney: composeAttorneyData({ attorneyRelatedPerson }),
     employer: composeEmployerData({ employer: employerOrganization }),
-    paymentHistory: composePatientPaymentsData({ payments }),
   };
 };
 
@@ -139,7 +135,6 @@ const visitDetailsRenderConfig: PdfRenderConfig<VisitDetailsData> = {
     { ...createEmergencyContactInfoSection(), preferredWidth: 'column' },
     { ...createAttorneyInfoSection(), preferredWidth: 'column' },
     { ...createConsentFormsSection(), preferredWidth: 'column' },
-    { ...createPatientPaymentsSection(), preferredWidth: 'column' },
     createDocumentsSection(),
   ],
 };

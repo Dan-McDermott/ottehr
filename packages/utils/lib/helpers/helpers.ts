@@ -1,5 +1,4 @@
 import Oystehr, { OystehrConfig } from '@oystehr/sdk';
-import { NetworkType } from 'candidhealth/api/resources/preEncounter/resources/coverages/resources/v1';
 import {
   Appointment,
   Coverage,
@@ -15,11 +14,11 @@ import { DateTime } from 'luxon';
 import { INSURANCE_PAY_OPTION, SELF_PAY_OPTION } from '../config-helpers/shared-questionnaire';
 import {
   allLicensesForPractitioner,
-  CANDID_PLAN_TYPE_SYSTEM,
   FHIR_IDENTIFIER_SYSTEM,
   getCoding,
   getFullName,
-  INSURANCE_CANDID_PLAN_TYPE_CODES,
+  INSURANCE_PLAN_TYPE_CODES,
+  INSURANCE_PLAN_TYPE_SYSTEM,
   OTTEHR_MODULE,
   PAYMENT_METHOD_EXTENSION_URL,
   PROVIDER_TYPE_EXTENSION_URL,
@@ -1599,14 +1598,14 @@ export function isPhysician(practitionerResource?: Practitioner): boolean {
   return isPhysicianProviderType(getProviderType(practitionerResource));
 }
 
-export const getCandidPlanTypeCodeFromCoverage = (coverage: Coverage): NetworkType | undefined => {
-  const coverageCandidTypeCode = coverage.type?.coding?.find(
-    (coding) => coding.system && coding.system === CANDID_PLAN_TYPE_SYSTEM
+export const getInsurancePlanTypeCodeFromCoverage = (coverage: Coverage): string | undefined => {
+  const coveragePlanTypeCode = coverage.type?.coding?.find(
+    (coding) => coding.system && coding.system === INSURANCE_PLAN_TYPE_SYSTEM
   )?.code;
-  if (!coverageCandidTypeCode || !INSURANCE_CANDID_PLAN_TYPE_CODES.includes(coverageCandidTypeCode)) {
+  if (!coveragePlanTypeCode || !INSURANCE_PLAN_TYPE_CODES.includes(coveragePlanTypeCode)) {
     return undefined;
   }
-  return coverageCandidTypeCode as NetworkType;
+  return coveragePlanTypeCode;
 };
 
 export function getAppointmentType(appointment: Appointment): { type: string } {

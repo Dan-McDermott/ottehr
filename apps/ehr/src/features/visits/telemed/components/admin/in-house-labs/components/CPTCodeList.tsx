@@ -1,13 +1,12 @@
 import { Add, Close, ErrorOutline } from '@mui/icons-material';
 import { Autocomplete, Box, Button, Grid, IconButton, Paper, TextField, Theme } from '@mui/material';
-import { ProcedureModifier } from 'candidhealth/api';
 import { Coding } from 'fhir/r4b';
 import { ReactElement, useEffect, useMemo, useState } from 'react';
 import { Controller, useFieldArray, useFormContext } from 'react-hook-form';
 import { AccordionCard } from 'src/components/AccordionCard';
 import { useGetCPTHCPCSSearch } from 'src/features/visits/shared/stores/appointment/appointment.queries';
 import { useDebounce } from 'src/shared/hooks/useDebounce';
-import { AdminInHouseLabItemDefinition } from 'utils';
+import { AdminInHouseLabItemDefinition, CPT_PROCEDURE_MODIFIER_CODES } from 'utils';
 import { FieldArrayListItemProps } from './shared.types';
 
 interface CPTCodeListProps {
@@ -70,7 +69,7 @@ function CPTCodeFormItem(props: CPTCodeFormItemProps): ReactElement {
   const { isFetching: isSearching, data } = useGetCPTHCPCSSearch({ search: debouncedSearchTerm, type: 'both' });
   const cptSearchOptions = useMemo(() => data?.codes || [], [data]);
 
-  const cptModifierOptions: ProcedureModifier[] = Object.values(ProcedureModifier);
+  const cptModifierOptions: readonly string[] = CPT_PROCEDURE_MODIFIER_CODES;
 
   const findFormValueInOptions = (value: string): Required<Pick<Coding, 'code' | 'display'>> | null =>
     cptSearchOptions.find((opt) => opt.code === value) || null;

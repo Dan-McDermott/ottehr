@@ -3,8 +3,8 @@ import {
   COVERAGE_ADDITIONAL_INFORMATION_URL,
   formatDateForDisplay,
   genderMap,
-  getCandidPlanTypeCodeFromCoverage,
   getFullName,
+  getInsurancePlanTypeCodeFromCoverage,
   getPayerId,
 } from 'utils';
 import { createConfiguredSection, DataComposer } from '../pdf-common';
@@ -58,10 +58,10 @@ export const composeInsuranceData: DataComposer<InsuranceDataInput, InsuranceInf
   }
 
   if (primary) {
-    primaryPlanType = getCandidPlanTypeCodeFromCoverage(primary);
+    primaryPlanType = getInsurancePlanTypeCodeFromCoverage(primary);
   }
   if (secondary) {
-    secondaryPlanType = getCandidPlanTypeCodeFromCoverage(secondary);
+    secondaryPlanType = getInsurancePlanTypeCodeFromCoverage(secondary);
   }
 
   const primarySubscriberDoB = formatDateForDisplay(primarySubscriber?.birthDate);

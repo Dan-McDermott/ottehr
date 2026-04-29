@@ -1,5 +1,4 @@
 import { BatchInputRequest } from '@oystehr/sdk';
-import { ProcedureModifier } from 'candidhealth/api';
 import { Command } from 'commander';
 import {
   ActivityDefinition,
@@ -652,7 +651,7 @@ interface StringComponent extends BaseComponent {
 
 type TestItemComponent = CodeableConceptComponent | QuantityComponent | StringComponent;
 
-type CptCode = { code: string; modifier?: { code: ProcedureModifier; display: string }[] };
+type CptCode = { code: string; modifier?: { code: string; display: string }[] };
 export interface TestItem {
   name: string;
   methods: TestItemMethods;

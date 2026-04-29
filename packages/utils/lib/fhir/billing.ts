@@ -37,7 +37,7 @@ export const getBillingProviderData = async (
       A reference string ("Organization/{uuid}") to that resource is exposed via the DEFAULT_BILLING_RESOURCE variable.
       
       You'll likely want to override this function with your implementation that either grabs the data you're after from some FHIR resource or another,
-      or perhaps queries Candid's get-all-contracts endpoint https://docs.joincandidhealth.com/api-reference/contracts/v-2/get-multi.
+      or queries an external claims/billing source.
     */
   const billingData = getBillingProviderDataFromResource(defaultBillingResource);
   if (billingData === undefined) {

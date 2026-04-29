@@ -20,5 +20,4 @@ export * from './questionnaires';
 export * from './practitioners';
 export * from './insurance';
 export * from './radiology';
-export * from './payments';
 export * from './getAllFhirSearchPages';

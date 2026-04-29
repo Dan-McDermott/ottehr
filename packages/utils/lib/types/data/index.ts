@@ -10,7 +10,6 @@ export * from './oystehr-api.types.ts';
 export * from './pagination.types';
 export * from './paperwork';
 export * from './paperwork.types';
-export * from './payment';
 export * from './telemed';
 export * from './immunization';
 export * from './admin-template.types';

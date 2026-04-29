@@ -10,7 +10,6 @@ import {
   chooseJson,
   CreateAppointmentUCTelemedParams,
   CreateAppointmentUCTelemedResponse,
-  CreditCardInfo,
   GetAnswerOptionsRequest,
   GetAppointmentsRequest,
   GetBookableItemListParams,
@@ -18,8 +17,6 @@ import {
   GetEligibilityResponse,
   GetPaperworkRequestParams,
   GetPastVisitsResponse,
-  GetPatientBalancesZambdaInput,
-  GetPatientBalancesZambdaOutput,
   GetScheduleRequestParams,
   GetScheduleResponse,
   GetTelemedAppointmentsRequest,
@@ -35,11 +32,6 @@ import {
   PaperworkResponseWithoutResponses,
   PatchPaperworkParameters,
   PatientInfo,
-  PaymentMethodDeleteParameters,
-  PaymentMethodListParameters,
-  PaymentMethodSetDefaultParameters,
-  PaymentMethodSetupParameters,
-  PaymentMethodSetupZambdaOutput,
   SubmitPaperworkParameters,
   UCGetPaperworkResponse,
   UpdateAppointmentRequestParams,
@@ -54,7 +46,6 @@ type ZambdaName =
   | 'cancel appointment'
   | 'check in'
   | 'create appointment'
-  | 'delete payment method'
   | 'get appointments'
   | 'get past visits'
   | 'get eligibility'
@@ -63,14 +54,10 @@ type ZambdaName =
   | 'get schedule'
   | 'get paperwork'
   | 'get patients'
-  | 'get patient balances'
-  | 'get payment methods'
   | 'get presigned file url'
   | 'get telemed states'
   | 'get wait status'
   | 'join call'
-  | 'setup payment method'
-  | 'set default payment method'
   | 'update appointment'
   | 'patch paperwork'
   | 'submit paperwork'
@@ -83,7 +70,6 @@ const zambdasPublicityMap: Record<ZambdaName, boolean> = {
   'cancel appointment': false,
   'check in': true,
   'create appointment': false,
-  'delete payment method': false,
   'get appointments': false,
   'get past visits': false,
   'get eligibility': false,
@@ -93,13 +79,10 @@ const zambdasPublicityMap: Record<ZambdaName, boolean> = {
   'get paperwork': true,
   'get patients': false,
   'get patient balances': false,
-  'get payment methods': false,
   'get presigned file url': true,
   'get telemed states': true,
   'get wait status': true,
   'join call': true,
-  'setup payment method': false,
-  'set default payment method': false,
   'update appointment': false,
   'patch paperwork': true,
   'submit paperwork': true,
@@ -119,7 +102,6 @@ export const getOystehrAPI = (
   checkIn: typeof checkIn;
   createAppointment: typeof createAppointment;
   createZ3Object: typeof createZ3Object;
-  deletePaymentMethod: typeof deletePaymentMethod;
   getAppointments: typeof getAppointments;
   getPastVisits: typeof getPastVisits;
   getEligibility: typeof getEligibility;
@@ -129,13 +111,9 @@ export const getOystehrAPI = (
   getPaperworkPublic: typeof getPaperworkPublic;
   getPaperwork: typeof getPaperwork;
   getPatients: typeof getPatients;
-  getPatientBalances: typeof getPatientBalances;
-  getPaymentMethods: typeof getPaymentMethods;
   getTelemedStates: typeof getTelemedStates;
   getWaitStatus: typeof getWaitStatus;
   joinCall: typeof joinCall;
-  setDefaultPaymentMethod: typeof setDefaultPaymentMethod;
-  setupPaymentMethod: typeof setupPaymentMethod;
   updateAppointment: typeof updateAppointment;
   patchPaperwork: typeof patchPaperwork;
   submitPaperwork: typeof submitPaperwork;
@@ -148,7 +126,6 @@ export const getOystehrAPI = (
     cancelAppointmentZambdaID,
     checkInZambdaID,
     createAppointmentZambdaID,
-    deletePaymentMethodZambdaID,
     getAppointmentsZambdaID,
     getPastVisitsZambdaID,
     getEligibilityZambdaID,
@@ -157,14 +134,10 @@ export const getOystehrAPI = (
     getScheduleZambdaID,
     getPaperworkZambdaID,
     getPatientsZambdaID,
-    getPatientBalancesZambdaID,
-    getPaymentMethodsZambdaID,
     getPresignedFileURLZambdaID,
     getTelemedLocationsZambdaID: getTelemedStatesZambdaID,
     getWaitStatusZambdaID,
     joinCallZambdaID,
-    setDefaultPaymentMethodZambdaID,
-    setupPaymentMethodZambdaID,
     updateAppointmentZambdaID,
     patchPaperworkZambdaID,
     submitPaperworkZambdaID,
@@ -178,7 +151,6 @@ export const getOystehrAPI = (
     'cancel appointment': cancelAppointmentZambdaID,
     'check in': checkInZambdaID,
     'create appointment': createAppointmentZambdaID,
-    'delete payment method': deletePaymentMethodZambdaID,
     'get appointments': getAppointmentsZambdaID,
     'get past visits': getPastVisitsZambdaID,
     'get eligibility': getEligibilityZambdaID,
@@ -187,14 +159,10 @@ export const getOystehrAPI = (
     'get schedule': getScheduleZambdaID,
     'get paperwork': getPaperworkZambdaID,
     'get patients': getPatientsZambdaID,
-    'get patient balances': getPatientBalancesZambdaID,
-    'get payment methods': getPaymentMethodsZambdaID,
     'get presigned file url': getPresignedFileURLZambdaID,
     'get telemed states': getTelemedStatesZambdaID,
     'get wait status': getWaitStatusZambdaID,
     'join call': joinCallZambdaID,
-    'set default payment method': setDefaultPaymentMethodZambdaID,
-    'setup payment method': setupPaymentMethodZambdaID,
     'update appointment': updateAppointmentZambdaID,
     'patch paperwork': patchPaperworkZambdaID,
     'submit paperwork': submitPaperworkZambdaID,
@@ -290,10 +258,6 @@ export const getOystehrAPI = (
     }
   };
 
-  const deletePaymentMethod = async (parameters: PaymentMethodDeleteParameters): Promise<unknown> => {
-    return await makeZapRequest('delete payment method', parameters);
-  };
-
   const getAppointments = async (
     parameters?: GetTelemedAppointmentsRequest
   ): Promise<GetTelemedAppointmentsResponseEhr> => {
@@ -334,16 +298,6 @@ export const getOystehrAPI = (
     return await makeZapRequest('get patients');
   };
 
-  const getPatientBalances = async (
-    parameters: GetPatientBalancesZambdaInput
-  ): Promise<GetPatientBalancesZambdaOutput> => {
-    return await makeZapRequest('get patient balances', parameters);
-  };
-
-  const getPaymentMethods = async (parameters: PaymentMethodListParameters): Promise<{ cards: CreditCardInfo[] }> => {
-    return await makeZapRequest('get payment methods', parameters);
-  };
-
   const getPresignedFileURL = async (appointmentID: string, fileType: string, fileFormat: string): Promise<any> => {
     const payload = {
       appointmentID,
@@ -365,16 +319,6 @@ export const getOystehrAPI = (
 
   const joinCall = async (parameters: JoinCallRequestParameters): Promise<JoinCallResponse> => {
     return await makeZapRequest('join call', parameters);
-  };
-
-  const setDefaultPaymentMethod = async (parameters: PaymentMethodSetDefaultParameters): Promise<unknown> => {
-    return await makeZapRequest('set default payment method', parameters);
-  };
-
-  const setupPaymentMethod = async (
-    parameters: PaymentMethodSetupParameters
-  ): Promise<PaymentMethodSetupZambdaOutput> => {
-    return await makeZapRequest('setup payment method', parameters);
   };
 
   const updateAppointment = async (parameters: UpdateAppointmentRequestParams): Promise<UpdateAppointmentResponse> => {
@@ -428,7 +372,6 @@ export const getOystehrAPI = (
     checkIn,
     createAppointment,
     createZ3Object,
-    deletePaymentMethod,
     getAppointments,
     getPastVisits,
     getEligibility,
@@ -438,13 +381,9 @@ export const getOystehrAPI = (
     getPaperworkPublic,
     getPaperwork,
     getPatients,
-    getPatientBalances,
-    getPaymentMethods,
     getTelemedStates,
     getWaitStatus,
     joinCall,
-    setDefaultPaymentMethod,
-    setupPaymentMethod,
     updateAppointment,
     patchPaperwork,
     submitPaperwork,

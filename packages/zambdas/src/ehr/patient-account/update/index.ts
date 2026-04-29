@@ -26,7 +26,6 @@ import { ValidationError } from 'yup';
 import {
   checkOrCreateM2MClientToken,
   createOystehrClient,
-  getStripeClient,
   sendErrors,
   wrapHandler,
   ZambdaInput,
@@ -37,7 +36,6 @@ import {
   createUpdatePharmacyPatchOps,
   getAccountAndCoverageResourcesForPatient,
   updatePatientAccountFromQuestionnaire,
-  updateStripeCustomer,
 } from '../../shared/harvest';
 
 const ZAMBDA_NAME = 'update-patient-account';
@@ -138,27 +136,14 @@ const performEffect = async (input: FinishedInput, oystehr: Oystehr): Promise<vo
   let workersCompAccount: Account | undefined;
 
   try {
-    const {
-      account,
-      guarantorResource,
-      workersCompAccount: latestWorkersCompAccount,
-    } = await getAccountAndCoverageResourcesForPatient(patientId, oystehr);
+    const { account, workersCompAccount: latestWorkersCompAccount } = await getAccountAndCoverageResourcesForPatient(
+      patientId,
+      oystehr
+    );
     updatedAccount = account;
     workersCompAccount = latestWorkersCompAccount;
-
-    const stripeClient = getStripeClient(input.secrets);
-
-    if (!account || !guarantorResource) {
-      console.log('could not find account or guarantor, skipping stripe update');
-    } else {
-      await updateStripeCustomer({
-        account,
-        guarantorResource,
-        stripeClient,
-      });
-    }
   } catch (e) {
-    console.error('error updating stripe details', e);
+    console.error('error refreshing account resources', e);
     const ae = await writeAuditEvent(
       { resultBundle, providerProfileReference, questionnaireResponse, patientId },
       oystehr

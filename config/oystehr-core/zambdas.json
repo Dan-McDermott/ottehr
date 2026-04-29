@@ -421,34 +421,6 @@
       "src": "src/ehr/get-employees/index",
       "zip": ".dist/zips/get-employees.zip"
     },
-    "GET-PAYMENT-LOCATIONS": {
-      "name": "get-payment-locations",
-      "type": "http_auth",
-      "runtime": "nodejs22.x",
-      "src": "src/rcm/payments/get-payment-locations/index",
-      "zip": ".dist/zips/get-payment-locations.zip"
-    },
-    "GET-STRIPE-ACCOUNT-INFO": {
-      "name": "get-stripe-account-info",
-      "type": "http_auth",
-      "runtime": "nodejs22.x",
-      "src": "src/rcm/payments/get-stripe-account-info/index",
-      "zip": ".dist/zips/get-stripe-account-info.zip"
-    },
-    "GET-TERMINAL-READERS": {
-      "name": "get-terminal-readers",
-      "type": "http_auth",
-      "runtime": "nodejs22.x",
-      "src": "src/rcm/payments/get-terminal-readers/index",
-      "zip": ".dist/zips/get-terminal-readers.zip"
-    },
-    "SAVE-TERMINAL-LOCATION": {
-      "name": "save-terminal-location",
-      "type": "http_auth",
-      "runtime": "nodejs22.x",
-      "src": "src/rcm/payments/save-terminal-location/index",
-      "zip": ".dist/zips/save-terminal-location.zip"
-    },
     "SYNC-USER": {
       "name": "sync-user",
       "type": "http_auth",
@@ -694,34 +666,6 @@
       "src": "src/patient/get-appointment-details/index",
       "zip": ".dist/zips/get-appointment-details.zip"
     },
-    "PAYMENT-METHODS-LIST": {
-      "name": "payment-methods-list",
-      "type": "http_auth",
-      "runtime": "nodejs22.x",
-      "src": "src/patient/payment-methods/list/index",
-      "zip": ".dist/zips/payment-methods-list.zip"
-    },
-    "PAYMENT-METHODS-DELETE": {
-      "name": "payment-methods-delete",
-      "type": "http_auth",
-      "runtime": "nodejs22.x",
-      "src": "src/patient/payment-methods/delete/index",
-      "zip": ".dist/zips/payment-methods-delete.zip"
-    },
-    "PAYMENT-METHODS-SETUP": {
-      "name": "payment-methods-setup",
-      "type": "http_auth",
-      "runtime": "nodejs22.x",
-      "src": "src/patient/payment-methods/setup/index",
-      "zip": ".dist/zips/payment-methods-setup.zip"
-    },
-    "PAYMENT-METHODS-SET-DEFAULT": {
-      "name": "payment-methods-set-default",
-      "type": "http_auth",
-      "runtime": "nodejs22.x",
-      "src": "src/patient/payment-methods/set-default/index",
-      "zip": ".dist/zips/payment-methods-set-default.zip"
-    },
     "SEARCH-PLACES": {
       "name": "search-places",
       "type": "http_auth",
@@ -962,13 +906,6 @@
       "runtime": "nodejs22.x",
       "src": "src/subscriptions/task/sub-visit-note-pdf-and-email/index",
       "zip": ".dist/zips/sub-visit-note-pdf-and-email.zip"
-    },
-    "SUB-PATIENT-PAYMENT-CANDID-SYNC-AND-RECEIPT": {
-      "name": "sub-patient-payment-candid-sync-and-receipt",
-      "type": "subscription",
-      "runtime": "nodejs22.x",
-      "src": "src/subscriptions/task/sub-patient-payment-candid-sync-and-receipt/index",
-      "zip": ".dist/zips/sub-patient-payment-candid-sync-and-receipt.zip"
     },
     "AI-INTERVIEW-START": {
       "name": "ai-interview-start",
@@ -1229,55 +1166,6 @@
       "runtime": "nodejs22.x",
       "src": "src/ehr/update-nursing-order/index",
       "zip": ".dist/zips/update-nursing-order.zip"
-    },
-    "PATIENT-PAYMENTS-LIST": {
-      "name": "patient-payments-list",
-      "type": "http_auth",
-      "runtime": "nodejs22.x",
-      "src": "src/ehr/patient-payments/list/index",
-      "zip": ".dist/zips/patient-payments-list.zip"
-    },
-    "PATIENT-PAYMENTS-POST": {
-      "name": "patient-payments-post",
-      "type": "http_auth",
-      "runtime": "nodejs22.x",
-      "src": "src/ehr/patient-payments/post/index",
-      "zip": ".dist/zips/patient-payments-post.zip"
-    },
-    "PATIENT-PAYMENTS-GET-CONFIG": {
-      "name": "patient-payments-terminal-get-config",
-      "type": "http_auth",
-      "runtime": "nodejs22.x",
-      "src": "src/ehr/patient-payments/terminal/get-config/index",
-      "zip": ".dist/zips/patient-payments-terminal-get-config.zip"
-    },
-    "PATIENT-PAYMENTS-CHECK-PAYMENT-STATUS": {
-      "name": "patient-payments-terminal-check-payment-status",
-      "type": "http_auth",
-      "runtime": "nodejs22.x",
-      "src": "src/ehr/patient-payments/terminal/check-payment-status/index",
-      "zip": ".dist/zips/patient-payments-terminal-check-payment-status.zip"
-    },
-    "PATIENT-PAYMENTS-CANCEL-READER-ACTION": {
-      "name": "patient-payments-terminal-cancel-reader-action",
-      "type": "http_auth",
-      "runtime": "nodejs22.x",
-      "src": "src/ehr/patient-payments/terminal/cancel-reader-action/index",
-      "zip": ".dist/zips/patient-payments-terminal-cancel-reader-action.zip"
-    },
-    "PATIENT-PAYMENTS-INITIATE-PAYMENT": {
-      "name": "patient-payments-terminal-initiate-payment",
-      "type": "http_auth",
-      "runtime": "nodejs22.x",
-      "src": "src/ehr/patient-payments/terminal/initiate-payment/index",
-      "zip": ".dist/zips/patient-payments-terminal-initiate-payment.zip"
-    },
-    "PATIENT-PAYMENTS-FINALIZE-PAYMENT": {
-      "name": "patient-payments-terminal-finalize-payment",
-      "type": "http_auth",
-      "runtime": "nodejs22.x",
-      "src": "src/ehr/patient-payments/terminal/finalize-payment/index",
-      "zip": ".dist/zips/patient-payments-terminal-finalize-payment.zip"
     },
     "FAILING-ENDPOINT": {
       "name": "failing-endpoint",
@@ -1553,13 +1441,6 @@
       "runtime": "nodejs22.x",
       "src": "src/subscriptions/task/sub-refresh-invoice-task/index",
       "zip": ".dist/zips/sub-refresh-invoice-task.zip"
-    },
-    "GET_PATIENT_BALANCES": {
-      "name": "get-patient-balances",
-      "type": "http_auth",
-      "runtime": "nodejs22.x",
-      "src": "src/ehr/get-patient-balances/index",
-      "zip": ".dist/zips/get-patient-balances.zip"
     },
     "GET_LOGIN_PHONE_NUMBERS": {
       "name": "get-login-phone-numbers",
@@ -2166,18 +2047,6 @@
             "valueString": "update"
           }
         ]
-      }
-    },
-    "SUB_PATIENT_PAYMENT_CANDID_SYNC_AND_RECEIPT_SUBSCRIPTION": {
-      "resource": {
-        "resourceType": "Subscription",
-        "status": "active",
-        "reason": "Perform Candid sync and create receipt PDF for patient payment",
-        "criteria": "Task?code=https://fhir.ottehr.com/CodeSystem/patient-payment-candid-sync-and-receipt|patient-payment-candid-sync-and-receipt&status=requested",
-        "channel": {
-          "type": "rest-hook",
-          "endpoint": "zapehr-lambda:#{ref/zambdas/SUB-PATIENT-PAYMENT-CANDID-SYNC-AND-RECEIPT/id}"
-        }
       }
     },
     "SUB_REFRESH_INVOICE_TASK_SUBSCRIPTION": {

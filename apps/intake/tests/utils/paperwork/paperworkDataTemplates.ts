@@ -541,24 +541,6 @@ const createPhotoIDData = (options?: { includeFront?: boolean; includeBack?: boo
 });
 
 /**
- * Create credit card data (Stripe payment)
- *
- * This is a special case that uses Stripe iframe for PCI compliance.
- * The linkId is 'valid-card-on-file' but the value is a structured object
- * that gets handled specially by fillCreditCard().
- */
-const createCreditCardData = (overrides?: { number?: string; expiry?: string; cvc?: string }): FieldTestData => ({
-  valid: {
-    'valid-card-on-file': {
-      number: overrides?.number || '4242424242424242', // Stripe test card
-      expiry: overrides?.expiry || '12/30',
-      cvc: overrides?.cvc || '123',
-    },
-  },
-  // No invalid values - Stripe iframe handles validation
-});
-
-/**
  * Create pharmacy data (Places API search)
  *
  * This is a special case that uses autocomplete search backed by Places API.
@@ -623,7 +605,6 @@ const pageDataTemplateMapFactory: (context?: {
     'pharmacy-page': createPharmacySearchData,
     'payment-option-page': () => createPaymentPageData('insurance'),
     'payment-option-occ-med-page': () => createOccMedPaymentPageData('employer'),
-    'card-payment-page': createCreditCardData,
     'responsible-party-page': () => createResponsiblePartyData('not-self'),
     'emergency-contact-page': createEmergencyContactData,
     'employer-information-page': createEmployerInformationData,

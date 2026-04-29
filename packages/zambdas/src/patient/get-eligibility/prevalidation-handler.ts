@@ -123,9 +123,9 @@ export const prevalidationHandler = async (input: Input, oystehrClient: Oystehr)
   let billingProviderData: BillingProviderDataObject;
   try {
     /*
-      for some use cases it might make more sense to go fetch the billing provider data from Candid,
+      for some use cases it might make more sense to fetch the billing provider data from an external source,
       in which case a contained resource would be created and added to the eligibility requests contained resources,
-      rather than attempting to get a reference to some resource in the FHIR db here. 
+      rather than attempting to get a reference to some resource in the FHIR db here.
     */
     billingProviderData = await complexBillingProviderValidation(
       { primary, secondary },

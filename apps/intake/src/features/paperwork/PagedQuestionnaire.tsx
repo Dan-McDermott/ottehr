@@ -52,8 +52,6 @@ import { getUCInputType } from '../../helpers/paperworkUtils';
 import { otherColors } from '../../IntakeThemeProvider';
 import { ControlButtonsProps } from '../../types';
 import AIInterview from './components/AIInterview';
-import { CardErrorDialog } from './components/CardErrorDialog';
-import { CreditCardVerification } from './components/CreditCardVerification';
 import DateInput from './components/DateInput';
 import DecimalInput from './components/DecimalInput';
 import { FieldHelperText } from './components/FieldHelperText';
@@ -65,7 +63,6 @@ import { PharmacyCollection } from './components/PharmacyCollection';
 import RadioInput from './components/RadioInput';
 import RadioListInput from './components/RadioListInput';
 import { usePaperworkContext } from './context';
-import { useCreditCardSave } from './hooks/useCreditCardSave';
 import { useAutoFillValues } from './useAutofill';
 import { useDisplayFilteredOptions, useFilterAnswersOptions } from './useFilterAnswersOptions';
 import { getPaperworkFieldId, useFieldError, usePaperworkFormHelpers, useQRState } from './useFormHelpers';
@@ -298,8 +295,6 @@ const PaperworkFormRoot: FC<PaperworkRootInput> = ({
 
   const { handleSubmit, formState } = useFormContext();
 
-  const { isSavingCard, handleCardSave } = useCreditCardSave();
-
   const theme = useTheme();
 
   const { isSubmitting, isLoading, errors } = formState;
@@ -307,20 +302,11 @@ const PaperworkFormRoot: FC<PaperworkRootInput> = ({
   const errorMessage = makeFormErrorMessage(items, errors);
   const { formValues } = useQRState();
 
-  const submitHandler = useCallback(
-    async ({ skipValidation = false }: { skipValidation?: boolean } = {}) => {
-      const { shouldContinue } = await handleCardSave({ skipValidation });
-
-      if (!shouldContinue) {
-        return;
-      }
-
-      setIsSavingProgress(true);
-      await handleSubmit(onSubmit)();
-      setIsSavingProgress(false);
-    },
-    [handleSubmit, onSubmit, handleCardSave]
-  );
+  const submitHandler = useCallback(async () => {
+    setIsSavingProgress(true);
+    await handleSubmit(onSubmit)();
+    setIsSavingProgress(false);
+  }, [handleSubmit, onSubmit]);
 
   const { bottomComponent, hideControls, controlButtons } = options;
   const swizzledCtrlButtons = useMemo(() => {
@@ -361,12 +347,8 @@ const PaperworkFormRoot: FC<PaperworkRootInput> = ({
         </FormHelperText>
       )}
       {!hideControls && (
-        <ControlButtons
-          {...swizzledCtrlButtons}
-          loading={isSavingProgress || isSubmitting || parentIsSaving || isSavingCard}
-        />
+        <ControlButtons {...swizzledCtrlButtons} loading={isSavingProgress || isSubmitting || parentIsSaving} />
       )}
-      <CardErrorDialog onContinueAnyway={() => void submitHandler({ skipValidation: true })} />
     </form>
   );
 };
@@ -816,15 +798,6 @@ const FormInputField: FC<GetFormInputFieldProps> = ({
         } else {
           return <RenderItems pageItem={pageItem} parentItem={item} items={item.item ?? []} fieldId={fieldId} />;
         }
-      case 'Credit Card':
-        return (
-          <CreditCardVerification
-            fieldId={fieldId}
-            onChange={smartOnChange}
-            required={item.required ?? false}
-            value={unwrappedValue}
-          />
-        );
       case 'Medical History':
         return <AIInterview value={unwrappedValue} onChange={smartOnChange} />;
       case 'Link':

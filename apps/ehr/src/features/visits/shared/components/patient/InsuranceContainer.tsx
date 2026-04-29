@@ -176,7 +176,7 @@ export const InsuranceContainer: FC<InsuranceContainerProps> = ({
     },
   });
 
-  const insuranceCodeToCandidCode = {
+  const insuranceCodeToPlanCode = {
     '12': '16',
     '13': '16',
     '14': 'LM',
@@ -247,7 +247,7 @@ export const InsuranceContainer: FC<InsuranceContainerProps> = ({
         const insuranceCodeTemp = result?.coverageDetails?.insurance?.insuranceCode;
 
         if (insuranceCodeTemp) {
-          const newInsurance = (insuranceCodeToCandidCode as any)[insuranceCodeTemp];
+          const newInsurance = (insuranceCodeToPlanCode as any)[insuranceCodeTemp];
 
           if (newInsurance) {
             setValue(FormFields.insurancePlanType.key, newInsurance, { shouldDirty: true });

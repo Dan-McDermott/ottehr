@@ -9,13 +9,9 @@ import {
   Secrets,
   TaskIndicator,
 } from 'utils';
-import {
-  checkOrCreateM2MClientToken,
-  createOystehrClient,
-  StatementType,
-  wrapHandler,
-  ZambdaInput,
-} from '../../../shared';
+import { checkOrCreateM2MClientToken, createOystehrClient, wrapHandler, ZambdaInput } from '../../../shared';
+
+type StatementType = 'standard' | 'past-due' | 'final-notice';
 
 const ZAMBDA_NAME = 'create-mail-statement-task';
 const validStatementTypes = new Set<StatementType>(['standard', 'past-due', 'final-notice']);

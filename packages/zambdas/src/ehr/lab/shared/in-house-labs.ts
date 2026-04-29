@@ -1,5 +1,4 @@
 import Oystehr, { BatchInputPostRequest } from '@oystehr/sdk';
-import { ProcedureModifier } from 'candidhealth/api';
 import {
   ActivityDefinition,
   CodeableConcept,
@@ -1047,7 +1046,7 @@ function parseCptModifierExtension(ext: Extension[]): CptCodeInHouseLabDefinitio
 
   const modifiers = modifierCodings
     ?.map((coding) => {
-      if (coding.code && coding.display) return { code: coding.code as ProcedureModifier, display: coding.display };
+      if (coding.code && coding.display) return { code: coding.code, display: coding.display };
       return undefined;
     })
     .filter((elm) => elm !== undefined);

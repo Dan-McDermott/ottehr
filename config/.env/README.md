@@ -77,14 +77,6 @@ This directory contains per-environment configuration files for Ottehr. The file
 |---|---|
 | `IN_PERSON_PREBOOK_DISPLAY_TOMORROW_SLOTS_AT_HOUR` | The hour of the day (0-23, local time) at which the schedule endpoint begins showing next-day appointment slots. For example, `9` means tomorrow's slots become visible starting at 9 AM. |
 
-### Billing -- Candid Health
-
-| Variable | Description |
-|---|---|
-| `CANDID_CLIENT_ID` | OAuth client ID for the Candid Health billing API. Used to submit medical encounters for insurance claim processing. |
-| `CANDID_CLIENT_SECRET` | Client secret for Candid Health API authentication. **Keep this confidential.** |
-| `CANDID_ENV` | Candid Health environment to target (`SANDBOX` for testing, `PRODUCTION` for live billing). |
-
 ### Payments -- Stripe
 
 | Variable | Description |
