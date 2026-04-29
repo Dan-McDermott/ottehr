@@ -49,6 +49,7 @@ import PatientDocumentsExplorerPage from './pages/PatientDocumentsExplorerPage';
 import PatientInformationPage from './pages/PatientInformationPage';
 import PatientPage from './pages/PatientPage';
 import PatientsPage from './pages/Patients';
+import PaymentLocationDetailPage from './pages/PaymentLocationDetailPage';
 import Reports from './pages/Reports';
 import {
   AiAssistedEncounters,
@@ -87,6 +88,7 @@ export const FEE_SCHEDULES_URL = '/admin/fee-schedule';
 export const CHARGE_MASTERS_URL = '/admin/charge-masters';
 export const VIRTUAL_LOCATIONS_URL = '/admin/virtual-locations';
 export const BILLING_URL = '/admin/billing';
+export const PAYMENT_LOCATIONS_URL = '/admin/billing/payments/locations';
 export const GLOBAL_TEMPLATES_URL = '/admin/global-templates';
 
 const MUI_X_LICENSE_KEY = import.meta.env.VITE_APP_MUI_X_LICENSE_KEY;
@@ -251,6 +253,7 @@ function App(): ReactElement {
                   <Route path={`${INSURANCES_URL}/:insurance`} element={<EditInsurance />} />
                   <Route path={`${FEE_SCHEDULES_URL}/:id`} element={<EditChargeItem />} />
                   <Route path={`${CHARGE_MASTERS_URL}/:id`} element={<EditChargeItem mode="charge-master" />} />
+                  <Route path={`${PAYMENT_LOCATIONS_URL}/:id`} element={<PaymentLocationDetailPage />} />
                   <Route path={`${GLOBAL_TEMPLATES_URL}/:templateId`} element={<GlobalTemplateDetailPage />} />
                   <Route path="/admin/in-house-labs/add" element={<AdminAddInHouseLab />} />
                   <Route path="/admin/in-house-labs/:activityDefinitionId" element={<AdminInHouseLabDetails />} />

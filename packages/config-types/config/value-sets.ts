@@ -2,10 +2,11 @@ import z from 'zod';
 import { FormFieldOptionSchema } from './questionnaire';
 
 /**
- * InsurancePlanType - Insurance type with X12 NetworkType plan code
+ * InsurancePlanType - Insurance type with Candid Health integration
+ * Maps to Candid's NetworkType codes for claims processing
  */
 export const InsurancePlanTypeSchema = z.object({
-  planCode: z.string(),
+  candidCode: z.string(), // NetworkType from candidhealth - using string to avoid dependency
   label: z.string(),
   coverageCoding: z
     .object({

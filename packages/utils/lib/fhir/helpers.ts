@@ -71,6 +71,8 @@ import {
   VisitType,
 } from '../types';
 import {
+  ACCOUNT_PAYMENT_PROVIDER_ID_SYSTEM_STRIPE,
+  ACCOUNT_PAYMENT_PROVIDER_ID_SYSTEM_STRIPE_ACCOUNT,
   APPOINTMENT_LOCKED_META_TAG,
   APPOINTMENT_LOCKED_META_TAG_SYSTEM,
   COVERAGE_MEMBER_IDENTIFIER_BASE,
@@ -1263,6 +1265,43 @@ export const getVersionedReferencesFromBundleResources = (bundle: Bundle): Refer
 export const checkBundleOutcomeOk = (bundle: Bundle): boolean => {
   const outcomeEntry = bundle.entry?.[0]?.response?.outcome?.id === 'ok';
   return outcomeEntry;
+};
+
+export const getStripeCustomerIdFromAccount = (
+  account: Account,
+  stripeAccount: string | undefined
+): string | undefined => {
+  if (!stripeAccount) {
+    return account.identifier?.find((ident) => {
+      return ident.system === ACCOUNT_PAYMENT_PROVIDER_ID_SYSTEM_STRIPE && !ident.extension;
+    })?.value;
+  } else {
+    return account.identifier?.find((ident) => {
+      return (
+        ident.system === ACCOUNT_PAYMENT_PROVIDER_ID_SYSTEM_STRIPE &&
+        ident.extension?.some((ext) => {
+          return ext.url === ACCOUNT_PAYMENT_PROVIDER_ID_SYSTEM_STRIPE_ACCOUNT && ext.valueString === stripeAccount;
+        })
+      );
+    })?.value;
+  }
+};
+
+export const getAllStripeCustomerAccountPairs = (
+  account: Account
+): { stripeAccount: string | undefined; customerId: string }[] => {
+  const stripeIdentifiers = account.identifier?.filter((ident) => {
+    return ident.system === ACCOUNT_PAYMENT_PROVIDER_ID_SYSTEM_STRIPE;
+  });
+  if (!stripeIdentifiers) {
+    return [];
+  }
+  return stripeIdentifiers.map((ident) => {
+    const stripeAccount = ident.extension?.find((ext) => {
+      return ext.url === ACCOUNT_PAYMENT_PROVIDER_ID_SYSTEM_STRIPE_ACCOUNT;
+    })?.valueString;
+    return { stripeAccount, customerId: ident.value ?? '' };
+  });
 };
 
 export const getActiveAccountGuarantorReference = (account: Account): string | undefined => {

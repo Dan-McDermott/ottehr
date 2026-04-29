@@ -18,6 +18,7 @@ import { t } from 'i18next';
 import { FC, ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Navigate, Outlet, useLocation, useNavigate, useParams } from 'react-router-dom';
+import { useGetPaymentMethods, useSetupPaymentMethod } from 'src/telemed/features/paperwork';
 import {
   APIError,
   ComplexValidationResult,
@@ -212,6 +213,22 @@ export const PaperworkHome: FC = () => {
     });
   }, [allItems]);
 
+  const {
+    data: stripeSetupData,
+    isFetching: isSetupDataLoading,
+    refetch: refetchSetupData,
+  } = useSetupPaymentMethod(patient?.id, appointmentId);
+
+  const {
+    data: cardData,
+    isFetching: cardsAreLoading,
+    refetch: refetchPaymentMethods,
+  } = useGetPaymentMethods({
+    beneficiaryPatientId: patient?.id,
+    appointmentId,
+    setupCompleted: Boolean(stripeSetupData),
+  });
+
   const outletContext: PaperworkContext = useMemo(() => {
     return {
       appointment,
@@ -224,7 +241,14 @@ export const PaperworkHome: FC = () => {
       patient,
       updateTimestamp,
       saveButtonDisabled,
+      cardsAreLoading,
+      paymentMethods: cardData?.cards ?? [],
+      paymentMethodStateInitializing:
+        (stripeSetupData === undefined && isSetupDataLoading) || (cardData?.cards.length === 0 && cardsAreLoading),
+      stripeSetupData,
       setContinueLabel,
+      refetchPaymentMethods,
+      refetchSetupData,
       setSaveButtonDisabled,
       findAnswerWithLinkId: (linkId: string): QuestionnaireResponseItem | undefined => {
         return findQuestionnaireResponseItemLinkId(linkId, completedPaperwork);
@@ -240,7 +264,13 @@ export const PaperworkHome: FC = () => {
     patient,
     updateTimestamp,
     saveButtonDisabled,
+    cardsAreLoading,
+    cardData?.cards,
+    stripeSetupData,
+    isSetupDataLoading,
     setContinueLabel,
+    refetchPaymentMethods,
+    refetchSetupData,
   ]);
 
   const redirectTarget = useMemo(() => {

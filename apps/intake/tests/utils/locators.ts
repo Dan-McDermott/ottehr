@@ -150,6 +150,9 @@ export class Locators {
   secondaryInsuranceHeading: Locator;
   policyAddressIsTheSame: Locator;
   secondaryPolicyAddressIsTheSame: Locator;
+  creditCardNumber: Locator;
+  creditCardExpiry: Locator;
+  creditCardCVC: Locator;
   paperworkSelectOptionFieldErrorMessage: Locator;
   paperworkErrorInFieldAboveMessage: Locator;
   currentMedicationsPresent: Locator;
@@ -237,6 +240,8 @@ export class Locators {
   wrInviteeFirstName: Locator;
   wrInviteeLastName: Locator;
   responsiblePartyAddress2: Locator;
+  selectedCard: Locator;
+  cardNumberFilled: Locator;
   itemAddedValue: Locator;
   emergencyContactInformationRelationship: Locator;
   emergencyContactInformationFirstName: Locator;
@@ -380,6 +385,14 @@ export class Locators {
     this.secondaryInsuranceFrontImage = page.locator('[id="secondary-insurance.item.14-description"]');
     this.secondaryInsuranceBackImage = page.locator('[id="secondary-insurance.item.15-description"]');
     this.secondaryPolicyAddressIsTheSame = page.getByLabel('policy-holder-address-as-patient-2-label');
+
+    // Credit Card locators
+    const stripeIframe = page.frameLocator('iframe[title="Secure card payment input frame"]');
+    this.creditCardNumber = stripeIframe.locator('[data-elements-stable-field-name="cardNumber"]');
+    this.creditCardExpiry = stripeIframe.locator('[data-elements-stable-field-name="cardExpiry"]');
+    this.creditCardCVC = stripeIframe.locator('[data-elements-stable-field-name="cardCvc"]');
+    this.selectedCard = page.locator('[name="default-card-selection-group"]');
+    this.cardNumberFilled = page.getByTestId(dataTestIds.cardNumber);
 
     // Responsible Party locators
     this.responsiblePartyRelationship = page.locator('[id="responsible-party-relationship"]');

@@ -95,7 +95,7 @@ import {
   VISIT_CONSULT_NOTE_DOC_REF_CODING_CODE,
 } from 'utils';
 import { removePrefix } from '../appointment/helpers';
-import { getCptModifierCodeFromProcedure } from '../cpt-modifier';
+import { getCptModifierCodeFromProcedure } from '../candid';
 import { fillMeta } from '../helpers';
 import { isDocumentPublished, PdfDocumentReferencePublishedStatuses, PdfInfo } from '../pdf/pdf-utils';
 import { saveOrUpdateResourceRequest } from '../resources.helpers';

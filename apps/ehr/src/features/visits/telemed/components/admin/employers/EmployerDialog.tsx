@@ -38,6 +38,7 @@ import {
   useCreateEmployerMutation,
   useUpdateEmployerMutation,
 } from 'src/rcm/state/employers';
+import { CANDID_NON_INSURANCE_PAYER_IDENTIFIER_SYSTEM } from 'src/rcm/state/employers/employers.api';
 import { useListFeeSchedulesQuery } from 'src/rcm/state/fee-schedules/fee-schedule.queries';
 import { CASE_RATE_CODE, RCM_TAG_SYSTEM } from 'utils';
 
@@ -169,7 +170,10 @@ export default function EmployerDialog({ open, onClose, employer }: EmployerDial
   const [contactExpanded, setContactExpanded] = useState(false);
   const [associationsExpanded, setAssociationsExpanded] = useState(false);
   const [copiedOttehrId, setCopiedOttehrId] = useState(false);
+  const [copiedCandidId, setCopiedCandidId] = useState(false);
   const isEditMode = Boolean(employer);
+  const candidId = employer?.identifier?.find((id) => id.system === CANDID_NON_INSURANCE_PAYER_IDENTIFIER_SYSTEM)
+    ?.value;
 
   const { data: feeSchedules, isFetching: feeSchedulesFetching } = useListFeeSchedulesQuery({
     enabled: isEditMode && !!employer?.id,
@@ -201,6 +205,7 @@ export default function EmployerDialog({ open, onClose, employer }: EmployerDial
       setContactExpanded(false);
       setAssociationsExpanded(false);
       setCopiedOttehrId(false);
+      setCopiedCandidId(false);
       return;
     }
 
@@ -233,6 +238,7 @@ export default function EmployerDialog({ open, onClose, employer }: EmployerDial
     );
     setContactExpanded(Boolean(telecom.length || notes));
     setCopiedOttehrId(false);
+    setCopiedCandidId(false);
   }, [open, employer, reset]);
 
   const resetAndClose = useCallback((): void => {
@@ -241,6 +247,7 @@ export default function EmployerDialog({ open, onClose, employer }: EmployerDial
     setContactExpanded(false);
     setAssociationsExpanded(false);
     setCopiedOttehrId(false);
+    setCopiedCandidId(false);
     onClose();
   }, [reset, onClose]);
 
@@ -250,6 +257,14 @@ export default function EmployerDialog({ open, onClose, employer }: EmployerDial
     await navigator.clipboard.writeText(employer.id);
     setCopiedOttehrId(true);
     window.setTimeout(() => setCopiedOttehrId(false), 2000);
+  };
+
+  const handleCopyCandidId = async (): Promise<void> => {
+    if (!candidId) return;
+
+    await navigator.clipboard.writeText(candidId);
+    setCopiedCandidId(true);
+    window.setTimeout(() => setCopiedCandidId(false), 2000);
   };
 
   const isSubmitting = createEmployerMutation.isPending || updateEmployerMutation.isPending;
@@ -298,6 +313,8 @@ export default function EmployerDialog({ open, onClose, employer }: EmployerDial
         : undefined,
     };
 
+    let savedEmployer: Organization;
+
     if (isEditMode) {
       if (!employer?.id) {
         enqueueSnackbar('Employer ID is missing; unable to update employer', { variant: 'error' });
@@ -305,12 +322,21 @@ export default function EmployerDialog({ open, onClose, employer }: EmployerDial
       }
 
       const updatePayload: UpdateEmployerInput = { employerId: employer.id, ...payload };
-      await updateEmployerMutation.mutateAsync(updatePayload);
+      savedEmployer = await updateEmployerMutation.mutateAsync(updatePayload);
     } else {
-      await createEmployerMutation.mutateAsync(payload);
+      savedEmployer = await createEmployerMutation.mutateAsync(payload);
     }
 
     await queryClient.invalidateQueries({ queryKey: ['employers'] });
+
+    const savedCandidId = savedEmployer.identifier?.find(
+      (id) => id.system === CANDID_NON_INSURANCE_PAYER_IDENTIFIER_SYSTEM
+    )?.value;
+
+    if (!savedCandidId) {
+      enqueueSnackbar('Employer saved, but Candid sync failed', { variant: 'warning' });
+      return;
+    }
 
     enqueueSnackbar(isEditMode ? 'Employer updated successfully' : 'Employer created successfully', {
       variant: 'success',
@@ -591,6 +617,59 @@ export default function EmployerDialog({ open, onClose, employer }: EmployerDial
                 )}
               </Box>
             </Tooltip>
+          </Box>
+
+          {/* Candid ID row */}
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, minHeight: 22 }}>
+            <Typography variant="caption" color="text.secondary" sx={{ flexShrink: 0 }}>
+              Candid ID:
+            </Typography>
+            {candidId ? (
+              <Tooltip title={copiedCandidId ? 'Copied' : 'Copy ID'}>
+                <Box
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => void handleCopyCandidId()}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      void handleCopyCandidId();
+                    }
+                  }}
+                  sx={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 0.5,
+                    cursor: 'pointer',
+                    minWidth: 0,
+                    color: 'text.secondary',
+                    '&:hover': { opacity: 0.85 },
+                  }}
+                >
+                  <Typography
+                    variant="caption"
+                    sx={{
+                      fontFamily: 'monospace',
+                      whiteSpace: 'nowrap',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      color: 'text.secondary',
+                    }}
+                  >
+                    {candidId}
+                  </Typography>
+                  {copiedCandidId ? (
+                    <CheckIcon color="success" sx={{ fontSize: 14 }} />
+                  ) : (
+                    <ContentCopyIcon sx={{ fontSize: 14, color: 'text.secondary' }} />
+                  )}
+                </Box>
+              </Tooltip>
+            ) : (
+              <Typography variant="caption" color="error.main" sx={{ fontWeight: 500 }}>
+                Candid Sync Failed
+              </Typography>
+            )}
           </Box>
         </Box>
       )}

@@ -20,6 +20,8 @@
     "get-rcm-tasks": "tsx src/scripts/get-rcm-tasks.ts",
     "send-invoices-to-patients-by-sms": "tsx src/scripts/send-invoices-to-patients-by-sms.ts",
     "send-past-due-invoices-to-patients-by-sms": "tsx src/scripts/send-past-due-invoices-to-patients-by-sms.ts",
+    "get-invoiceable-claims": "tsx src/scripts/get-invoiceable-claims.ts staging",
+    "create-non-insurance-payers": "tsx src/scripts/create-non-insurance-payers.ts",
     "create-non-insurance-payer-resources": "tsx src/scripts/create-non-insurance-payer-resources.ts",
     "fix-duplicate-payers": "tsx src/scripts/fix-duplicate-payers.ts",
     "fix-payer-ids-in-orgs": "tsx src/scripts/fix-payer-ids-in-orgs.ts",
@@ -70,6 +72,7 @@
     "randomstring": "^1.3.1",
     "retry": "^0.13.1",
     "short-uuid": "^4.2.2",
+    "stripe": "^17.7.0",
     "utils": "*",
     "xml2js": "^0.6.2"
   },

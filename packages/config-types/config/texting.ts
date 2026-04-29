@@ -38,6 +38,7 @@ export const I18nQuickTextSchema: z.ZodType<I18nQuickText, z.ZodTypeDef, unknown
  */
 export interface TextingInvoicingConfig {
   smsMessage: string;
+  stripeMemoMessage: string;
   dueDateInDays: number;
 }
 
@@ -68,6 +69,7 @@ export interface TextingConfig {
 export const TextingConfigSchema: z.ZodType<TextingConfig, z.ZodTypeDef, unknown> = z.object({
   invoicing: z.object({
     smsMessage: z.string(),
+    stripeMemoMessage: z.string(),
     dueDateInDays: z.number(),
   }),
   telemed: z.object({

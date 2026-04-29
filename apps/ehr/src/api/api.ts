@@ -96,6 +96,8 @@ import {
   GetMedicationHistoryQuickPicksResponse,
   GetNursingOrdersInput,
   GetOrUploadPatientProfilePhotoZambdaResponse,
+  GetPatientBalancesZambdaInput,
+  GetPatientBalancesZambdaOutput,
   GetPatientLoginPhoneNumbersInput,
   GetPatientLoginPhoneNumbersOutput,
   GetPresignedFileURLInput,
@@ -276,6 +278,7 @@ const ADMIN_CREATE_IN_HOUSE_MEDICATION_QUICK_PICK_ZAMBDA_ID = 'admin-create-in-h
 const ADMIN_UPDATE_IN_HOUSE_MEDICATION_QUICK_PICK_ZAMBDA_ID = 'admin-update-in-house-medication-quick-pick';
 const ADMIN_REMOVE_IN_HOUSE_MEDICATION_QUICK_PICK_ZAMBDA_ID = 'admin-remove-in-house-medication-quick-pick';
 const UPDATE_INVOICE_TASK_ZAMBDA_ID = 'update-invoice-task';
+const GET_PATIENT_BALANCES_ZAMBDA_ID = 'get-patient-balances';
 const ADMIN_CREATE_TEMPLATE_ZAMBDA_ID = 'admin-create-template';
 const ADMIN_RENAME_TEMPLATE_ZAMBDA_ID = 'admin-rename-template';
 const ADMIN_DELETE_TEMPLATE_ZAMBDA_ID = 'admin-delete-template';
@@ -1675,6 +1678,26 @@ export const updateInvoiceTask = async (oystehr: Oystehr, parameters: UpdateInvo
       id: UPDATE_INVOICE_TASK_ZAMBDA_ID,
       ...parameters,
     });
+  } catch (error: unknown) {
+    console.log(error);
+    throw apiErrorToThrow(error);
+  }
+};
+
+export const getPatientBalances = async (
+  oystehr: Oystehr,
+  parameters: GetPatientBalancesZambdaInput
+): Promise<GetPatientBalancesZambdaOutput> => {
+  try {
+    if (GET_PATIENT_BALANCES_ZAMBDA_ID == null) {
+      throw new Error('get patient balances environment variable could not be loaded');
+    }
+
+    const response = await oystehr.zambda.execute({
+      id: GET_PATIENT_BALANCES_ZAMBDA_ID,
+      ...parameters,
+    });
+    return chooseJson(response);
   } catch (error: unknown) {
     console.log(error);
     throw apiErrorToThrow(error);

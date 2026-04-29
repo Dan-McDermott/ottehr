@@ -45,11 +45,14 @@ import {
 } from 'src/api/api';
 import ImageCarousel, { ImageCarouselObject } from 'src/components/ImageCarousel';
 import ImageUploader from 'src/components/ImageUploader';
+import PatientBalances from 'src/components/PatientBalances';
 import { RoundedButton } from 'src/components/RoundedButton';
 import { ScannerModal } from 'src/components/ScannerModal';
 import { useOystehrAPIClient } from 'src/features/visits/shared/hooks/useOystehrAPIClient';
 import { useGetPatientAccount, useGetPatientCoverages } from 'src/hooks/useGetPatient';
+import { useGetPatientBalances } from 'src/hooks/useGetPatientBalances';
 import { useGetPatientDocs } from 'src/hooks/useGetPatientDocs';
+import { useGetPatientPaymentsList } from 'src/hooks/useGetPatientPaymentsList';
 import {
   BOOKING_CONFIG,
   DocumentInfo,
@@ -97,6 +100,7 @@ import {
 import { InPersonAppointmentStatusChip } from '../components/InPersonAppointmentStatusChip';
 import PaperworkFlagIndicator from '../components/PaperworkFlagIndicator';
 import PatientInformation, { IconProps } from '../components/PatientInformation';
+import PatientPaymentList from '../components/PatientPaymentsList';
 import { PriorityIconWithBorder } from '../components/PriorityIconWithBorder';
 import { HOP_QUEUE_URI } from '../constants';
 import { dataTestIds } from '../constants/data-test-ids';
@@ -483,6 +487,15 @@ export default function VisitDetailsPage(): ReactElement {
     enabled: Boolean(oystehrZambda) && appointmentID !== undefined,
   });
 
+  const {
+    data: patientBalancesData,
+    isLoading: patientBalancesLoading,
+    refetch: refetchPatientBalances,
+  } = useGetPatientBalances({
+    patientId,
+    disabled: !patientId,
+  });
+
   useEffect(() => {
     if (consentAttested === null) {
       setConsentAttested(serverConsentAttested);
@@ -503,7 +516,23 @@ export default function VisitDetailsPage(): ReactElement {
   const encounter = visitDetailsData?.encounter;
   const qrId = visitDetailsData?.qrId;
 
-  usePatientData(patientId);
+  const {
+    data: paymentData,
+    refetch: refetchPaymentList,
+    isRefetching: isPaymentListRefetching,
+    error: paymentListError,
+  } = useGetPatientPaymentsList({
+    patientId: patient?.id ?? '',
+    encounterId: encounter?.id ?? '',
+    disabled: !encounter?.id || !patient?.id,
+  });
+
+  const refetchAllPaymentData = useCallback(async () => {
+    await refetchPaymentList();
+    await refetchPatientBalances();
+  }, [refetchPaymentList, refetchPatientBalances]);
+
+  const { insurance: insuranceData, isFetching } = usePatientData(patientId);
 
   const { isLoadingDocuments, downloadDocument } = useGetPatientDocs(patientId ?? '');
 
@@ -1309,6 +1338,34 @@ export default function VisitDetailsPage(): ReactElement {
                     </Grid>
                   </Grid>
                   <Grid container item xs={12} sm={6} direction="column">
+                    {!patientBalancesLoading &&
+                    patientBalancesData?.totalBalanceCents &&
+                    patientBalancesData?.totalBalanceCents > 0 ? (
+                      <Grid item>
+                        <PatientBalances
+                          patient={patient}
+                          patientBalances={patientBalancesData}
+                          handleClose={refetchAllPaymentData}
+                        />
+                      </Grid>
+                    ) : null}
+                    <Grid item>
+                      <PatientPaymentList
+                        patient={patient}
+                        appointment={appointment}
+                        loading={loading || isFetching}
+                        encounterId={encounter?.id ?? ''}
+                        responsibleParty={{
+                          fullName: visitDetailsData?.responsiblePartyName || '',
+                          email: visitDetailsData?.responsiblePartyEmail || '',
+                        }}
+                        insuranceCoverages={insuranceData}
+                        paymentData={paymentData}
+                        refetchPaymentList={refetchAllPaymentData}
+                        isRefetching={isPaymentListRefetching}
+                        paymentListError={paymentListError}
+                      />
+                    </Grid>
                     <Grid item>
                       <AppointmentNotesHistory
                         appointment={appointment}

@@ -40,6 +40,7 @@ import {
 import {
   checkOrCreateM2MClientToken,
   createOystehrClient,
+  getStripeClient,
   getUser,
   topLevelCatch,
   wrapHandler,
@@ -49,7 +50,9 @@ import { getChartData } from '../get-chart-data';
 import {
   createMasterRecordPatchOperations,
   createUpdatePharmacyPatchOps,
+  getAccountAndCoverageResourcesForPatient,
   updatePatientAccountFromQuestionnaire,
+  updateStripeCustomer,
 } from '../shared/harvest';
 
 const ZAMBDA_NAME = 'merge-patients';
@@ -373,6 +376,17 @@ const performEffect = async (input: FinishedInput, oystehr: Oystehr): Promise<vo
       },
       oystehr
     );
+
+    // Update Stripe customer
+    try {
+      const { account, guarantorResource } = await getAccountAndCoverageResourcesForPatient(mainPatientId, oystehr);
+      const stripeClient = getStripeClient(input.secrets);
+      if (account && guarantorResource) {
+        await updateStripeCustomer({ account, guarantorResource, stripeClient });
+      }
+    } catch (e) {
+      console.error('Error updating stripe details (non-fatal)', e);
+    }
 
     console.log('  Patient record fields merged successfully');
   }

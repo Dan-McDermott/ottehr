@@ -8,10 +8,8 @@ import {
   wrapHandler,
   ZambdaInput,
 } from '../../../shared';
+import { EMPLOYER_ORG_TYPE_CODE, EMPLOYER_ORG_TYPE_SYSTEM } from '../helpers';
 import { validateRequestParameters } from './validateRequestParameters';
-
-const EMPLOYER_ORG_TYPE_SYSTEM = 'http://terminology.hl7.org/CodeSystem/organization-type';
-const EMPLOYER_ORG_TYPE_CODE = 'occupational-medicine-employer';
 
 let m2mToken: string;
 export const index = wrapHandler('list-employers', async (input: ZambdaInput): Promise<APIGatewayProxyResult> => {

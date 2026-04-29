@@ -1,3 +1,4 @@
+import { ProcedureModifier } from 'candidhealth/api/index.js';
 import {
   CPTCodeDTO,
   DiagnosisDTO,
@@ -310,7 +311,8 @@ export interface StringComponent extends BaseComponent {
 
 export type TestItemComponent = CodeableConceptComponent | QuantityComponent | StringComponent;
 
-export type CptCodeInHouseLabDefinition = { code: string; modifier?: { code: string; display: string }[] };
+// This could almost have matched the CPTCodeDTO if not for the ProcedureModifier
+export type CptCodeInHouseLabDefinition = { code: string; modifier?: { code: ProcedureModifier; display: string }[] };
 export interface AdminInHouseLabItemDefinition {
   name: string;
   methods?: TestItemMethods;

@@ -8,6 +8,7 @@ export * from './employerInfo';
 export * from './insuranceInfo';
 export * from './patientDetails';
 export * from './patientInfo';
+export * from './patientPayments';
 export * from './pharmacyInfo';
 export * from './primaryCarePhysician';
 export * from './responsiblePartyInfo';

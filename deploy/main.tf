@@ -98,6 +98,7 @@ module "ottehr_apps" {
     OYSTEHR_APPLICATION_ID           = module.oystehr.app_ehr_id
     PROJECT_API_ZAMBDA_URL           = local.is_local ? "http://localhost:3000/local" : "https://project-api.zapehr.com/v1"
     PATIENT_APP_URL                  = var.patient_portal_domain == null ? one(module.infra[*].patient_portal_domain) == null ? "http://localhost:3002" : "https://${one(module.infra[*].patient_portal_domain)}" : "https://${var.patient_portal_domain}"
+    STRIPE_PUBLIC_KEY                = module.oystehr.stripe_public_key
     DYNAMSOFT_LICENSE_KEY            = module.oystehr.DYNAMSOFT_LICENSE_KEY
     SENTRY_AUTH_TOKEN                = module.oystehr.sentry_auth_token
     SENTRY_ORG                       = module.oystehr.sentry_org
@@ -117,6 +118,7 @@ module "ottehr_apps" {
     DEFAULT_WALKIN_LOCATION_NAME  = module.oystehr.DEFAULT_WALKIN_LOCATION_NAME
     MIXPANEL_TOKEN                = module.oystehr.MIXPANEL_TOKEN
     GTM_ID                        = module.oystehr.GTM_ID
+    STRIPE_PUBLIC_KEY             = module.oystehr.stripe_public_key
     SENTRY_AUTH_TOKEN             = module.oystehr.sentry_auth_token
     SENTRY_ORG                    = module.oystehr.sentry_org
     SENTRY_PROJECT                = module.oystehr.sentry_apps_project

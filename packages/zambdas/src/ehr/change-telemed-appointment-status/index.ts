@@ -1,10 +1,13 @@
 import Oystehr, { BatchInputPostRequest } from '@oystehr/sdk';
 import { captureException } from '@sentry/aws-serverless';
 import { APIGatewayProxyResult } from 'aws-lambda';
-import { ChargeItem, Task } from 'fhir/r4b';
+import { CandidApiClient } from 'candidhealth';
+import { ChargeItem, Encounter, Task } from 'fhir/r4b';
 import {
   ChangeTelemedAppointmentStatusInput,
   ChangeTelemedAppointmentStatusResponse,
+  createCandidApiClient,
+  getOptionalSecret,
   getPatientContactEmail,
   getQuestionnaireResponseByLinkId,
   getSecret,
@@ -17,7 +20,9 @@ import {
 } from 'utils';
 import { getPresignedURLs } from '../../patient/appointment/get-visit-details/helpers';
 import {
+  CANDID_ENCOUNTER_ID_IDENTIFIER_SYSTEM,
   checkOrCreateM2MClientToken,
+  createEncounterFromAppointment,
   createOystehrClient,
   getEmailClient,
   getMyPractitionerId,
@@ -38,6 +43,7 @@ import { validateRequestParameters } from './validateRequestParameters';
 
 // Lifting up value to outside of the handler allows it to stay in memory across warm lambda invocations
 let m2mToken: string;
+let candidApiClient: CandidApiClient | undefined;
 const ZAMBDA_NAME = 'change-telemed-appointment-status';
 
 export const index = wrapHandler(ZAMBDA_NAME, async (input: ZambdaInput): Promise<APIGatewayProxyResult> => {
@@ -160,6 +166,33 @@ export const performEffect = async (
 
     const visitNoteCreatedSuccessfully = await createVisitNoteForPatientPortal();
 
+    let candidEncounterId: string | undefined;
+    try {
+      if (!secrets) throw new Error('Secrets are not defined, cannot create Candid encounter.');
+      const candidClientId = getOptionalSecret(SecretsKeys.CANDID_CLIENT_ID, secrets);
+      if (candidClientId == null || candidClientId.length === 0) {
+        console.log('CANDID_CLIENT_ID is not set, skipping encounter submission to candid');
+      } else {
+        if (!candidApiClient) {
+          candidApiClient = createCandidApiClient(secrets);
+        }
+        console.log('[CLAIM SUBMISSION] Attempting to create telemed encounter in candid...');
+        candidEncounterId = await createEncounterFromAppointment(visitResources, oystehr, candidApiClient);
+      }
+    } catch (error) {
+      console.error(`Error creating Candid encounter: ${error}, stringified error: ${JSON.stringify(error)}`);
+      captureException(error, {
+        tags: {
+          appointmentId,
+          encounterId: encounter.id,
+        },
+      });
+      // longer term we probably want a more decoupled approach where the candid synching is offloaded and tracked
+      // for now prevent this failure from causing the endpoint to error out
+    }
+    console.log(`[CLAIM SUBMISSION] Candid telemed encounter created with ID ${candidEncounterId}`);
+    await addCandidEncounterIdToEncounter(candidEncounterId, encounter, oystehr);
+
     // if this is a self-pay encounter, create a charge item
     if (selfPayVisit) {
       if (visitResources.account?.id === undefined) {
@@ -276,4 +309,30 @@ export const performEffect = async (
       ? 'Appointment status successfully changed and appropriate charged issued.'
       : 'Appointment status successfully changed.',
   };
+};
+
+const addCandidEncounterIdToEncounter = async (
+  candidEncounterId: string | undefined,
+  encounter: Encounter,
+  oystehr: Oystehr
+): Promise<void> => {
+  const encounterId = encounter.id;
+  if (candidEncounterId == null || encounterId == null) {
+    return;
+  }
+  const identifier = {
+    system: CANDID_ENCOUNTER_ID_IDENTIFIER_SYSTEM,
+    value: candidEncounterId,
+  };
+  await oystehr.fhir.patch({
+    resourceType: 'Encounter',
+    id: encounterId,
+    operations: [
+      {
+        op: 'add',
+        path: encounter.identifier != null ? '/identifier/-' : '/identifier',
+        value: encounter.identifier != null ? identifier : [identifier],
+      },
+    ],
+  });
 };
