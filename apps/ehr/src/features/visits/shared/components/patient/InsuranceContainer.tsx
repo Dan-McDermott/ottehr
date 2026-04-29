@@ -19,6 +19,7 @@ import { Row } from 'src/components/layout';
 import { StatusStyleObject } from 'src/components/RefreshableStatusWidget';
 import { dataTestIds } from 'src/constants/data-test-ids';
 import { useApiClients } from 'src/hooks/useAppClients';
+import { useMergedInsuranceQuickPicks } from 'src/hooks/useMergedQuickPicks';
 import {
   chooseJson,
   CoverageCheckWithDetails,
@@ -29,6 +30,7 @@ import {
   PATIENT_RECORD_CONFIG,
   PatientPaymentBenefit,
 } from 'utils';
+import { QuickPicksButton } from '../QuickPicksButton';
 import { CopayWidget } from './CopayWidget';
 import { EligibilityDetailsDialog } from './EligibilityDetailsDialog';
 import PatientRecordFormField from './PatientRecordFormField';
@@ -140,6 +142,8 @@ export const InsuranceContainer: FC<InsuranceContainerProps> = ({
     hiddenFields,
     requiredFields,
   } = usePatientRecordFormSection({ formSection: insuranceSection, index: ordinal - 1 });
+
+  const { quickPicks: insuranceQuickPicks } = useMergedInsuranceQuickPicks();
 
   const insurancePriority = watch(FormFields.insurancePriority.key);
 
@@ -473,6 +477,21 @@ export const InsuranceContainer: FC<InsuranceContainerProps> = ({
         requiredFormFields={requiredFields}
         hiddenFormFields={hiddenFields}
       />
+      <Row label="">
+        <QuickPicksButton
+          quickPicks={insuranceQuickPicks}
+          getLabel={(item) => item.name}
+          searchable
+          buttonLabel="Insurance carrier quick picks"
+          onSelect={(item) => {
+            setValue(
+              FormFields.insuranceCarrier.key,
+              { reference: `Organization/${item.organizationId}`, display: item.name },
+              { shouldDirty: true }
+            );
+          }}
+        />
+      </Row>
       <PatientRecordFormField
         item={FormFields.insuranceCarrier}
         isLoading={false}

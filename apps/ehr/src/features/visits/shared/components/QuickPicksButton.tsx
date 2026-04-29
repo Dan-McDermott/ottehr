@@ -13,6 +13,7 @@ interface QuickPicksButtonProps<T> {
   isAdmin?: boolean;
   onAddOrUpdate?: () => void;
   searchable?: boolean;
+  buttonLabel?: string;
 }
 
 export const QuickPicksButton = <T,>({
@@ -24,6 +25,7 @@ export const QuickPicksButton = <T,>({
   isAdmin = false,
   onAddOrUpdate,
   searchable = false,
+  buttonLabel = 'Quick Picks',
 }: QuickPicksButtonProps<T>): JSX.Element | null => {
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const [searchText, setSearchText] = useState('');
@@ -84,7 +86,7 @@ export const QuickPicksButton = <T,>({
           mb: 0.5,
         }}
       >
-        Quick Picks
+        {buttonLabel}
       </Button>
       <Menu
         anchorEl={anchorEl}

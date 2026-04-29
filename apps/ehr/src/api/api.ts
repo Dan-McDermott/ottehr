@@ -49,6 +49,8 @@ import {
   CreateInHouseMedicationInput,
   CreateInHouseMedicationQuickPickInput,
   CreateInHouseMedicationQuickPickResponse,
+  CreateInsuranceQuickPickInput,
+  CreateInsuranceQuickPickResponse,
   CreateLabOrderParameters,
   CreateLabOrderZambdaOutput,
   CreateMedicalConditionQuickPickInput,
@@ -90,6 +92,7 @@ import {
   GetImmunizationQuickPicksResponse,
   GetInHouseMedicationQuickPicksResponse,
   GetInHouseOrdersParameters,
+  GetInsuranceQuickPicksResponse,
   GetLabelPdfParameters,
   GetLabOrdersParameters,
   GetMedicalConditionQuickPicksResponse,
@@ -148,6 +151,7 @@ import {
   RemoveAllergyQuickPickResponse,
   RemoveImmunizationQuickPickResponse,
   RemoveInHouseMedicationQuickPickResponse,
+  RemoveInsuranceQuickPickResponse,
   RemoveMedicalConditionQuickPickResponse,
   RemoveMedicationHistoryQuickPickResponse,
   RemoveProcedureQuickPickResponse,
@@ -261,6 +265,9 @@ const ADMIN_GET_ALLERGY_QUICK_PICKS_ZAMBDA_ID = 'admin-get-allergy-quick-picks';
 const ADMIN_CREATE_ALLERGY_QUICK_PICK_ZAMBDA_ID = 'admin-create-allergy-quick-pick';
 const ADMIN_UPDATE_ALLERGY_QUICK_PICK_ZAMBDA_ID = 'admin-update-allergy-quick-pick';
 const ADMIN_REMOVE_ALLERGY_QUICK_PICK_ZAMBDA_ID = 'admin-remove-allergy-quick-pick';
+const ADMIN_GET_INSURANCE_QUICK_PICKS_ZAMBDA_ID = 'admin-get-insurance-quick-picks';
+const ADMIN_CREATE_INSURANCE_QUICK_PICK_ZAMBDA_ID = 'admin-create-insurance-quick-pick';
+const ADMIN_REMOVE_INSURANCE_QUICK_PICK_ZAMBDA_ID = 'admin-remove-insurance-quick-pick';
 const ADMIN_GET_MEDICAL_CONDITION_QUICK_PICKS_ZAMBDA_ID = 'admin-get-medical-condition-quick-picks';
 const ADMIN_CREATE_MEDICAL_CONDITION_QUICK_PICK_ZAMBDA_ID = 'admin-create-medical-condition-quick-pick';
 const ADMIN_UPDATE_MEDICAL_CONDITION_QUICK_PICK_ZAMBDA_ID = 'admin-update-medical-condition-quick-pick';
@@ -2089,6 +2096,47 @@ export const removeAllergyQuickPick = async (
   try {
     const response = await oystehr.zambda.execute({
       id: ADMIN_REMOVE_ALLERGY_QUICK_PICK_ZAMBDA_ID,
+      quickPickId,
+    } as any);
+    return chooseJson(response);
+  } catch (error: unknown) {
+    console.log(error);
+    throw error;
+  }
+};
+
+// ── Insurance Quick Picks ──
+
+export const getInsuranceQuickPicks = async (oystehr: Oystehr): Promise<GetInsuranceQuickPicksResponse> => {
+  try {
+    const response = await oystehr.zambda.execute({ id: ADMIN_GET_INSURANCE_QUICK_PICKS_ZAMBDA_ID });
+    return chooseJson(response);
+  } catch (error: unknown) {
+    console.log(error);
+    throw error;
+  }
+};
+
+export const createInsuranceQuickPick = async (
+  oystehr: Oystehr,
+  parameters: CreateInsuranceQuickPickInput
+): Promise<CreateInsuranceQuickPickResponse> => {
+  try {
+    const response = await oystehr.zambda.execute({ id: ADMIN_CREATE_INSURANCE_QUICK_PICK_ZAMBDA_ID, ...parameters });
+    return chooseJson(response);
+  } catch (error: unknown) {
+    console.log(error);
+    throw error;
+  }
+};
+
+export const removeInsuranceQuickPick = async (
+  oystehr: Oystehr,
+  quickPickId: string
+): Promise<RemoveInsuranceQuickPickResponse> => {
+  try {
+    const response = await oystehr.zambda.execute({
+      id: ADMIN_REMOVE_INSURANCE_QUICK_PICK_ZAMBDA_ID,
       quickPickId,
     } as any);
     return chooseJson(response);

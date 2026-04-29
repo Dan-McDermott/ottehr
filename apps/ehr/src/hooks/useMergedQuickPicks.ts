@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from 'react';
 import {
   getAllergyQuickPicks,
   getImmunizationQuickPicks,
+  getInsuranceQuickPicks,
   getMedicalConditionQuickPicks,
   getMedicationHistoryQuickPicks,
   getProcedureQuickPicks,
@@ -11,6 +12,7 @@ import {
 import {
   AllergyQuickPickData,
   ImmunizationQuickPickData,
+  InsuranceQuickPickData,
   MedicalConditionQuickPickData,
   MedicationHistoryQuickPickData,
   ProcedureQuickPickData,
@@ -64,6 +66,10 @@ export function useMergedProcedureQuickPicks(): UseFhirQuickPicksResult<Procedur
 
 export function useMergedAllergyQuickPicks(): UseFhirQuickPicksResult<AllergyQuickPickData> {
   return useFhirQuickPicks(getAllergyQuickPicks);
+}
+
+export function useMergedInsuranceQuickPicks(): UseFhirQuickPicksResult<InsuranceQuickPickData> {
+  return useFhirQuickPicks(getInsuranceQuickPicks);
 }
 
 export function useMergedMedicalConditionQuickPicks(): UseFhirQuickPicksResult<MedicalConditionQuickPickData> {

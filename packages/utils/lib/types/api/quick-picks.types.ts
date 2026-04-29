@@ -173,6 +173,20 @@ export type GetImmunizationQuickPicksResponse = QuickPickListResponse<Immunizati
 export type RemoveImmunizationQuickPickInput = QuickPickRemoveInput;
 export type RemoveImmunizationQuickPickResponse = QuickPickRemoveResponse;
 
+// ── Insurance Quick Picks ──
+
+export interface InsuranceQuickPickData {
+  id?: string;
+  name: string;
+  organizationId: string;
+}
+
+export type CreateInsuranceQuickPickInput = QuickPickCreateInput<InsuranceQuickPickData>;
+export type CreateInsuranceQuickPickResponse = QuickPickCreateResponse<InsuranceQuickPickData>;
+export type GetInsuranceQuickPicksResponse = QuickPickListResponse<InsuranceQuickPickData>;
+export type RemoveInsuranceQuickPickInput = QuickPickRemoveInput;
+export type RemoveInsuranceQuickPickResponse = QuickPickRemoveResponse;
+
 // ── In-House Medication Quick Picks ──
 
 export interface InHouseMedicationQuickPickData {

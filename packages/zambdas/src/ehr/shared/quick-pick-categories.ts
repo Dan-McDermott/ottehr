@@ -2,6 +2,7 @@ import {
   AllergyQuickPickData,
   ImmunizationQuickPickData,
   InHouseMedicationQuickPickData,
+  InsuranceQuickPickData,
   MedicalConditionQuickPickData,
   MedicationHistoryQuickPickData,
   ProcedureQuickPickData,
@@ -72,6 +73,17 @@ export const IMMUNIZATION_QUICK_PICK_CATEGORY: QuickPickCategory<ImmunizationQui
     id,
     name: title,
     ...(config as Omit<ImmunizationQuickPickData, 'id' | 'name'>),
+  }),
+};
+
+export const INSURANCE_QUICK_PICK_CATEGORY: QuickPickCategory<InsuranceQuickPickData> = {
+  tagCode: 'insurance-quick-pick',
+  displayNameKey: 'name',
+  getDisplayName: (data) => data.name,
+  fromParsed: (id, title, config) => ({
+    id,
+    name: title,
+    ...(config as Omit<InsuranceQuickPickData, 'id' | 'name'>),
   }),
 };
 

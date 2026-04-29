@@ -1,15 +1,20 @@
 import { TabContext, TabList, TabPanel } from '@mui/lab';
 import { Autocomplete, Box, debounce, Tab, TextField } from '@mui/material';
 import { ErxSearchAllergensResponse, ErxSearchMedicationsResponse } from '@oystehr/sdk';
+import { useQuery } from '@tanstack/react-query';
+import { QuestionnaireItemAnswerOption, Reference } from 'fhir/r4b';
 import React, { ReactElement, useCallback, useMemo, useState } from 'react';
 import {
   createAllergyQuickPick,
+  createInsuranceQuickPick,
   createMedicalConditionQuickPick,
   createMedicationHistoryQuickPick,
   getAllergyQuickPicks,
+  getInsuranceQuickPicks,
   getMedicalConditionQuickPicks,
   getMedicationHistoryQuickPicks,
   removeAllergyQuickPick,
+  removeInsuranceQuickPick,
   removeMedicalConditionQuickPick,
   removeMedicationHistoryQuickPick,
 } from 'src/api/api';
@@ -20,7 +25,13 @@ import {
   useICD10SearchNew,
 } from 'src/features/visits/shared/stores/appointment/appointment.queries';
 import { useApiClients } from 'src/hooks/useAppClients';
-import { AllergyQuickPickData, MedicalConditionQuickPickData, MedicationHistoryQuickPickData } from 'utils';
+import {
+  AllergyQuickPickData,
+  dedupeObjectsByKey,
+  InsuranceQuickPickData,
+  MedicalConditionQuickPickData,
+  MedicationHistoryQuickPickData,
+} from 'utils';
 import ImmunizationQuickPicksPage from './ImmunizationQuickPicksPage';
 import InHouseMedicationQuickPicksPage from './InHouseMedicationQuickPicksPage';
 import ProcedureQuickPicksPage from './ProcedureQuickPicksPage';
@@ -30,6 +41,7 @@ import RadiologyQuickPicksPage from './RadiologyQuickPicksPage';
 type SubTab =
   | 'procedures'
   | 'allergies'
+  | 'insurance'
   | 'medical-conditions'
   | 'medications'
   | 'radiology'
@@ -247,6 +259,76 @@ const MedicalConditionSearchField: React.FC<{
   );
 };
 
+const InsuranceCarrierSearchField: React.FC<{
+  value: string;
+  onChange: (value: string) => void;
+  onExtraData?: (data: Record<string, string>) => void;
+}> = ({ value, onChange, onExtraData }) => {
+  const { oystehrZambda } = useApiClients();
+  const [searchTerm, setSearchTerm] = useState('');
+
+  const { isFetching, data } = useQuery({
+    queryKey: ['insurance-carrier-options'],
+    queryFn: async () => {
+      if (!oystehrZambda) throw new Error('API client not available');
+      const res = await oystehrZambda.zambda.execute({
+        id: 'get-answer-options',
+        answerSource: {
+          resourceType: 'Organization',
+          query: 'type=http://terminology.hl7.org/CodeSystem/organization-type|pay',
+          prependedIdentifier: 'http://terminology.hl7.org/CodeSystem/v2-0203',
+        },
+      });
+      const output = (res.output as Partial<QuestionnaireItemAnswerOption>[]).map(
+        (option) => ({ ...option.valueReference }) as Reference
+      );
+      return dedupeObjectsByKey(output, 'display');
+    },
+    enabled: !!oystehrZambda,
+  });
+
+  const options = data ?? [];
+  const selectedOption = value ? options.find((o) => o.display === value) ?? ({ display: value } as Reference) : null;
+
+  return (
+    <Autocomplete
+      value={selectedOption}
+      inputValue={searchTerm || value}
+      onInputChange={(_e, newInputValue, reason) => {
+        if (reason === 'input') setSearchTerm(newInputValue);
+      }}
+      onChange={(_e, selected) => {
+        if (selected && selected.reference) {
+          onChange(selected.display ?? '');
+          const orgId = selected.reference.startsWith('Organization/')
+            ? selected.reference.slice('Organization/'.length)
+            : selected.reference;
+          onExtraData?.({ organizationId: orgId });
+          setSearchTerm('');
+        } else {
+          onChange('');
+          onExtraData?.({ organizationId: '' });
+        }
+      }}
+      getOptionLabel={(option) => option?.display ?? ''}
+      isOptionEqualToValue={(option, val) => option.reference === val.reference}
+      options={options}
+      loading={isFetching}
+      fullWidth
+      noOptionsText={isFetching ? 'Loading...' : 'No insurance carriers found'}
+      renderInput={(params) => (
+        <TextField
+          {...params}
+          label="Insurance"
+          placeholder="Search insurance carriers..."
+          required
+          InputLabelProps={{ shrink: true }}
+        />
+      )}
+    />
+  );
+};
+
 export default function QuickPicksAdminPage(): ReactElement {
   const [subTab, setSubTab] = useState<SubTab>('procedures');
   const { oystehrZambda } = useApiClients();
@@ -271,6 +353,30 @@ export default function QuickPicksAdminPage(): ReactElement {
     async (id: string) => {
       if (!oystehrZambda) throw new Error('oystehrZambda was null');
       await removeAllergyQuickPick(oystehrZambda, id);
+    },
+    [oystehrZambda]
+  );
+
+  // ── Insurance callbacks ──
+  const fetchInsurance = useCallback(async () => {
+    if (!oystehrZambda) return [];
+    const response = await getInsuranceQuickPicks(oystehrZambda);
+    return response.quickPicks;
+  }, [oystehrZambda]);
+
+  const createInsurance = useCallback(
+    async (data: Omit<InsuranceQuickPickData, 'id'>) => {
+      if (!oystehrZambda) throw new Error('oystehrZambda was null');
+      const response = await createInsuranceQuickPick(oystehrZambda, { quickPick: data });
+      return response.quickPick;
+    },
+    [oystehrZambda]
+  );
+
+  const removeInsurance = useCallback(
+    async (id: string) => {
+      if (!oystehrZambda) throw new Error('oystehrZambda was null');
+      await removeInsuranceQuickPick(oystehrZambda, id);
     },
     [oystehrZambda]
   );
@@ -330,6 +436,7 @@ export default function QuickPicksAdminPage(): ReactElement {
           <TabList onChange={(_, v) => setSubTab(v)} aria-label="Quick pick categories">
             <Tab label="Procedures" value="procedures" sx={{ textTransform: 'none' }} />
             <Tab label="Allergies" value="allergies" sx={{ textTransform: 'none' }} />
+            <Tab label="Insurance" value="insurance" sx={{ textTransform: 'none' }} />
             <Tab label="Medical Conditions" value="medical-conditions" sx={{ textTransform: 'none' }} />
             <Tab label="Medications" value="medications" sx={{ textTransform: 'none' }} />
             <Tab label="Radiology" value="radiology" sx={{ textTransform: 'none' }} />
@@ -364,6 +471,32 @@ export default function QuickPicksAdminPage(): ReactElement {
             buildItemFromFields={(values) => ({
               name: values.name.trim(),
               ...(values.allergyId ? { allergyId: Number(values.allergyId) } : {}),
+            })}
+          />
+        </TabPanel>
+
+        <TabPanel value="insurance" sx={{ px: 0 }}>
+          <QuickPickEditor<InsuranceQuickPickData>
+            title="Insurance Quick Picks"
+            description="Manage common insurance carriers that appear as quick picks on the visit details and patient profile screens."
+            columns={[{ label: 'Insurance Name', getValue: (item) => item.name }]}
+            fields={[
+              {
+                key: 'name',
+                label: 'Insurance',
+                required: true,
+                renderField: (value, onValueChange, onExtraData) => (
+                  <InsuranceCarrierSearchField value={value} onChange={onValueChange} onExtraData={onExtraData} />
+                ),
+              },
+            ]}
+            editable={false}
+            fetchItems={fetchInsurance}
+            createItem={createInsurance}
+            removeItem={removeInsurance}
+            buildItemFromFields={(values) => ({
+              name: values.name.trim(),
+              organizationId: values.organizationId ?? '',
             })}
           />
         </TabPanel>
