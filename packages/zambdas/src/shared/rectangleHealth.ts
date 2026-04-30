@@ -550,9 +550,7 @@ export const getEntityForEncounter = async (encounterId: string, oystehr: Oysteh
   }
   const orgRef = location.managingOrganization?.reference;
   if (!orgRef || !orgRef.startsWith('Organization/')) {
-    throw new Error(
-      `Cannot resolve Rectangle Health entity for Location/${locationId}: missing managingOrganization`
-    );
+    throw new Error(`Cannot resolve Rectangle Health entity for Location/${locationId}: missing managingOrganization`);
   }
   const orgId = orgRef.slice('Organization/'.length);
   const org = await oystehr.fhir.get<Organization>({ resourceType: 'Organization', id: orgId });

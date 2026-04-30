@@ -252,7 +252,8 @@ const validateRequestParameters = (input: ZambdaInput): PostPatientPaymentInput 
     throw INVALID_INPUT_ERROR('"encounterId" must be a valid UUID.');
   }
 
-  const { paymentMethod, amountInCents, paymentMethodId, description, encryptedCardData, paymentToken } = paymentDetails;
+  const { paymentMethod, amountInCents, paymentMethodId, description, encryptedCardData, paymentToken } =
+    paymentDetails;
   if (
     paymentMethod !== 'card' &&
     paymentMethod !== 'card-reader' &&

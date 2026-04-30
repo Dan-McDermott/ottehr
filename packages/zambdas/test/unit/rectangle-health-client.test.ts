@@ -46,9 +46,9 @@ describe('RectangleHealthClient', () => {
 
   test('placeholder CipherPay key throws RectangleHealthApiError on sale', async () => {
     const client = new RectangleHealthClient(baseEnv({ cipherpayApiKey: RH_CIPHERPAY_API_KEY_PLACEHOLDER }));
-    await expect(
-      client.sale({ encrypted_card_data: 'enc', amount: '5.00', inv_num: 'inv-1' })
-    ).rejects.toBeInstanceOf(RectangleHealthApiError);
+    await expect(client.sale({ encrypted_card_data: 'enc', amount: '5.00', inv_num: 'inv-1' })).rejects.toBeInstanceOf(
+      RectangleHealthApiError
+    );
   });
 
   test('placeholder CipherPay key throws RectangleHealthApiError on saleViaToken', async () => {
@@ -144,7 +144,10 @@ describe('getEntityForEncounter', () => {
         resourceType: 'Organization',
         id: 'org-ao',
         identifier: [
-          { system: 'https://fhir.oystehr.com/PaymentIdSystem/rectangle-health/merchant-account-code', value: '78072001' },
+          {
+            system: 'https://fhir.oystehr.com/PaymentIdSystem/rectangle-health/merchant-account-code',
+            value: '78072001',
+          },
         ],
       } as Organization,
     });
@@ -158,7 +161,10 @@ describe('getEntityForEncounter', () => {
         resourceType: 'Organization',
         id: 'org-sp',
         identifier: [
-          { system: 'https://fhir.oystehr.com/PaymentIdSystem/rectangle-health/merchant-account-code', value: '78072002' },
+          {
+            system: 'https://fhir.oystehr.com/PaymentIdSystem/rectangle-health/merchant-account-code',
+            value: '78072002',
+          },
         ],
       } as Organization,
     });
