@@ -504,9 +504,15 @@ export function createRectangleHealthClient(secrets: Secrets | null, entity: RHC
 // ---------------------------------------------------------------------------
 // Entity resolution: Encounter -> Location -> Organization -> RHClinicEntity
 // ---------------------------------------------------------------------------
-// TODO(W1.4): replace with the canonical helper once W1.4 ships an
-// Encounter-aware variant; `getEntityForLocation` from utils already carries
-// the Location -> Organization -> entity portion.
+// TODO(W1.4): replace this inline resolver with the canonical
+// `getEntityForEncounter` helper once W1.4 lands the Organization → MAC
+// mapping in `utils/fhir/payments.ts`.
+
+const macToEntity = (mac: string | undefined): RHClinicEntity | undefined => {
+  if (mac === RH_MAC_AFTEROURS) return 'afterours';
+  if (mac === RH_MAC_SPIRE) return 'spire';
+  return undefined;
+};
 
 export const getEntityForEncounter = async (encounterId: string, oystehr: Oystehr): Promise<RHClinicEntity> => {
   const bundle = await oystehr.fhir.search<Encounter | Location>({
@@ -534,5 +540,20 @@ export const getEntityForEncounter = async (encounterId: string, oystehr: Oysteh
       `Cannot resolve Rectangle Health entity for Encounter/${encounterId}: included Location/${locationId} missing`
     );
   }
-  return getEntityForLocation(location, oystehr);
+  const orgRef = location.managingOrganization?.reference;
+  if (!orgRef || !orgRef.startsWith('Organization/')) {
+    throw new Error(
+      `Cannot resolve Rectangle Health entity for Location/${locationId}: missing managingOrganization`
+    );
+  }
+  const orgId = orgRef.slice('Organization/'.length);
+  const org = await oystehr.fhir.get<Organization>({ resourceType: 'Organization', id: orgId });
+  const mac = org.identifier?.find((ident) => ident.system === RH_MERCHANT_ACCOUNT_CODE_SYSTEM)?.value;
+  const entity = macToEntity(mac);
+  if (!entity) {
+    throw new Error(
+      `Cannot resolve Rectangle Health entity for Organization/${orgId}: identifier (system=${RH_MERCHANT_ACCOUNT_CODE_SYSTEM}) is missing or unrecognized`
+    );
+  }
+  return entity;
 };

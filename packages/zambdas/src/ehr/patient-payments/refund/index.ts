@@ -168,7 +168,7 @@ const makeRefundPaymentNotice = (input: RefundNoticeInput): PaymentNotice => {
     extension: [{ url: PAYMENT_METHOD_EXTENSION_URL, valueString: 'rh-card' }],
     payment: { reference: `#${reconciliation.id}` },
     identifier: [identifier],
+    recipient: recipientRef ?? { display: 'Rectangle Health' },
   };
-  if (recipientRef) notice.recipient = recipientRef;
   return notice;
 };
