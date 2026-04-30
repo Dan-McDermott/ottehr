@@ -386,11 +386,10 @@ export class Locators {
     this.secondaryInsuranceBackImage = page.locator('[id="secondary-insurance.item.15-description"]');
     this.secondaryPolicyAddressIsTheSame = page.getByLabel('policy-holder-address-as-patient-2-label');
 
-    // Credit Card locators
-    const stripeIframe = page.frameLocator('iframe[title="Secure card payment input frame"]');
-    this.creditCardNumber = stripeIframe.locator('[data-elements-stable-field-name="cardNumber"]');
-    this.creditCardExpiry = stripeIframe.locator('[data-elements-stable-field-name="cardExpiry"]');
-    this.creditCardCVC = stripeIframe.locator('[data-elements-stable-field-name="cardCvc"]');
+    // Credit Card locators (Rectangle Health CipherPay; W2.1 stub form)
+    this.creditCardNumber = page.getByTestId(dataTestIds.rhCardNumberInput);
+    this.creditCardExpiry = page.getByTestId(dataTestIds.rhCardExpiryInput);
+    this.creditCardCVC = page.getByTestId(dataTestIds.rhCardCvcInput);
     this.selectedCard = page.locator('[name="default-card-selection-group"]');
     this.cardNumberFilled = page.getByTestId(dataTestIds.cardNumber);
 
