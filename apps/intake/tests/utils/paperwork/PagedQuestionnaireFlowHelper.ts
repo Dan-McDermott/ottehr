@@ -431,12 +431,13 @@ export class PagedQuestionnaireFlowHelper {
   }
 
   /**
-   * Fill credit card information (handles Stripe iframe interaction)
+   * Fill credit card information (Rectangle Health CipherPay stub form, W2.1).
    *
-   * This is a special case that doesn't follow standard field patterns because:
-   * - Card fields are in a Stripe iframe (different context)
-   * - Requires checking if card already exists
-   * - Has async processing delay (Stripe → backend → UI update)
+   * Until the W2.1 CipherPay-encrypted form ships, the intake paperwork
+   * renders an in-app stub with three plain text inputs that emit a fixture
+   * `encryptedCardData` blob to the W1.1 setup zambda. The inputs carry the
+   * test ids defined in `dataTestIds` so we can drive them directly without
+   * iframe gymnastics.
    *
    * @param cardData - Credit card information (defaults to test card if not provided)
    */
@@ -445,10 +446,9 @@ export class PagedQuestionnaireFlowHelper {
     const expiry = cardData?.expiry || CARD_EXP_DATE;
     const cvc = cardData?.cvc || CARD_CVV;
 
-    const stripeIframe = this.page.frameLocator('iframe[title="Secure card payment input frame"]');
-    await stripeIframe.locator('[data-elements-stable-field-name="cardNumber"]').fill(number);
-    await stripeIframe.locator('[data-elements-stable-field-name="cardExpiry"]').fill(expiry);
-    await stripeIframe.locator('[data-elements-stable-field-name="cardCvc"]').fill(cvc);
+    await this.page.getByTestId(dataTestIds.rhCardNumberInput).fill(number);
+    await this.page.getByTestId(dataTestIds.rhCardExpiryInput).fill(expiry);
+    await this.page.getByTestId(dataTestIds.rhCardCvcInput).fill(cvc);
   }
 
   /**

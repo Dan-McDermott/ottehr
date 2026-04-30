@@ -541,21 +541,24 @@ const createPhotoIDData = (options?: { includeFront?: boolean; includeBack?: boo
 });
 
 /**
- * Create credit card data (Stripe payment)
+ * Create credit card data (Rectangle Health CipherPay stub, W2.1)
  *
- * This is a special case that uses Stripe iframe for PCI compliance.
+ * The intake paperwork renders the in-app RH stub form. Card values are
+ * captured in plain text fields; the stub emits a fixture
+ * `encryptedCardData` blob to the W1.1 `rh-payment-methods-setup` zambda.
  * The linkId is 'valid-card-on-file' but the value is a structured object
  * that gets handled specially by fillCreditCard().
  */
 const createCreditCardData = (overrides?: { number?: string; expiry?: string; cvc?: string }): FieldTestData => ({
   valid: {
     'valid-card-on-file': {
-      number: overrides?.number || '4242424242424242', // Stripe test card
+      // RH sandbox-friendly Visa test number; not a real Stripe-only PAN.
+      number: overrides?.number || '4111111111111111',
       expiry: overrides?.expiry || '12/30',
       cvc: overrides?.cvc || '123',
     },
   },
-  // No invalid values - Stripe iframe handles validation
+  // No invalid values - the stub form does not surface validation errors.
 });
 
 /**
