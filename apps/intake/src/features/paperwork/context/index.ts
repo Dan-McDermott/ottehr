@@ -8,6 +8,8 @@ import {
   PaperworkPatient,
   PaymentMethodSetupZambdaOutput,
   QuestionnaireFormFields,
+  RHCreditCardInfo,
+  RHListPaymentMethodsZambdaOutput,
   UCGetPaperworkResponse,
 } from 'utils';
 
@@ -24,6 +26,15 @@ export interface PaperworkContext
   paymentMethodStateInitializing: boolean;
   paymentMethods: CreditCardInfo[];
   stripeSetupData: PaymentMethodSetupZambdaOutput | undefined;
+  // Rectangle Health (v3) — primary credit-card paperwork path. The Stripe
+  // fields above are kept wired for telemed/legacy callers per the
+  // "swap, don't demolish" operating principle.
+  rhPaymentMethods: RHCreditCardInfo[];
+  rhCardsAreLoading: boolean;
+  rhPaymentMethodStateInitializing: boolean;
+  refetchRHPaymentMethods: (
+    options?: RefetchOptions | undefined
+  ) => Promise<QueryObserverResult<RHListPaymentMethodsZambdaOutput, Error>>;
   setContinueLabel?: (label: string | undefined) => void;
   saveButtonDisabled?: boolean;
   refetchPaymentMethods: (options?: RefetchOptions | undefined) => Promise<

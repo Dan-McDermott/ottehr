@@ -126,6 +126,12 @@ export const PatientInfoCollection: FC = () => {
       paymentMethods: [],
       paymentMethodStateInitializing: false,
       stripeSetupData: undefined,
+      rhPaymentMethods: [],
+      rhCardsAreLoading: false,
+      rhPaymentMethodStateInitializing: false,
+      refetchRHPaymentMethods: () => {
+        throw new Error('Function not implemented.');
+      },
       refetchPaymentMethods: () => {
         throw new Error('Function not implemented.');
       },
