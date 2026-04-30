@@ -1,5 +1,7 @@
 import { Identifier } from 'fhir/r4b';
-import { getSecret, Secrets, SecretsKeys } from 'utils';
+import { getSecret, RHClinicEntity, Secrets, SecretsKeys } from 'utils';
+
+export type { RHClinicEntity };
 
 // Rectangle Health (RH) v3 API client.
 // Docs: https://docs.rectanglehealth.com/api-runner/rectanglehealth/rh_api/v3
@@ -33,8 +35,6 @@ export const makeBusinessIdentifierForRectangleHealthPaymentToken = (tokenRefere
 // ---------------------------------------------------------------------------
 // Entity / environment / config
 // ---------------------------------------------------------------------------
-
-export type RHClinicEntity = 'afterours' | 'spire';
 
 export const RH_CIPHERPAY_API_KEY_PLACEHOLDER = 'PLACEHOLDER_GET_FROM_RH_CONSOLE';
 
@@ -170,6 +170,15 @@ export interface AccountHolder {
 
 export interface RectangleHealthSaleInput {
   encrypted_card_data: string;
+  amount: string;
+  inv_num: string;
+  accept_partial_amount?: boolean;
+  non_surcharge?: boolean;
+  account_holder?: AccountHolder;
+}
+
+export interface RectangleHealthSaleViaTokenInput {
+  payment_token: string;
   amount: string;
   inv_num: string;
   accept_partial_amount?: boolean;
