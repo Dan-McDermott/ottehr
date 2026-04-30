@@ -254,10 +254,15 @@ function basicAuthHeader(username: string, password: string): string {
 
 function assertCipherpayKeyConfigured(env: RectangleHealthEnvironment): void {
   if (!env.cipherpayApiKey || env.cipherpayApiKey === RH_CIPHERPAY_API_KEY_PLACEHOLDER) {
-    throw new Error(
-      `Rectangle Health CipherPay API key for entity "${env.entity}" is not configured ` +
-        `(set RH_CIPHERPAY_API_KEY_${env.entity.toUpperCase()} from the RH console).`
-    );
+    throw new RectangleHealthApiError({
+      status: 412,
+      surface: 'cipherpay',
+      endpoint: '/cipherpay',
+      responseBody: undefined,
+      message:
+        `Rectangle Health CipherPay API key for entity "${env.entity}" is the placeholder; ` +
+        `populate RH_CIPHERPAY_API_KEY_${env.entity.toUpperCase()} in your local secrets.`,
+    });
   }
 }
 
