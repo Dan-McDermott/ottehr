@@ -229,7 +229,16 @@ export const PaperworkHome: FC = () => {
     setupCompleted: Boolean(stripeSetupData),
   });
 
+  const {
+    data: rhCardData,
+    isFetching: rhCardsAreLoading,
+    refetch: refetchRHPaymentMethods,
+  } = useGetRHPaymentMethods({
+    patientId: patient?.id,
+  });
+
   const outletContext: PaperworkContext = useMemo(() => {
+    const rhCards = rhCardData?.cards ?? [];
     return {
       appointment,
       paperwork: completedPaperwork,
@@ -246,6 +255,10 @@ export const PaperworkHome: FC = () => {
       paymentMethodStateInitializing:
         (stripeSetupData === undefined && isSetupDataLoading) || (cardData?.cards.length === 0 && cardsAreLoading),
       stripeSetupData,
+      rhPaymentMethods: rhCards,
+      rhCardsAreLoading,
+      rhPaymentMethodStateInitializing: rhCards.length === 0 && rhCardsAreLoading,
+      refetchRHPaymentMethods,
       setContinueLabel,
       refetchPaymentMethods,
       refetchSetupData,
@@ -268,6 +281,9 @@ export const PaperworkHome: FC = () => {
     cardData?.cards,
     stripeSetupData,
     isSetupDataLoading,
+    rhCardData?.cards,
+    rhCardsAreLoading,
+    refetchRHPaymentMethods,
     setContinueLabel,
     refetchPaymentMethods,
     refetchSetupData,
