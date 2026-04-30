@@ -1,11 +1,8 @@
 import Oystehr from '@oystehr/sdk';
 import { APIGatewayProxyResult } from 'aws-lambda';
-import { CandidApi, CandidApiClient } from 'candidhealth';
-import { APIResponse } from 'candidhealth/core';
-import { Appointment, Encounter } from 'fhir/r4b';
-import { chunkThings, createCandidApiClient, GetPatientBalancesZambdaOutput } from 'utils';
+import { Appointment, Claim, ClaimResponse, Encounter, PaymentNotice } from 'fhir/r4b';
+import { GetPatientBalancesZambdaOutput } from 'utils';
 import {
-  CANDID_ENCOUNTER_ID_IDENTIFIER_SYSTEM,
   checkOrCreateM2MClientToken,
   createOystehrClient,
   lambdaResponse,
@@ -14,23 +11,25 @@ import {
 } from '../../shared';
 import { ValidatedInput, validateInput, validateSecrets } from './validateRequestParameters';
 
-type EncounterIdMap = Map<
+type EncounterDataMap = Map<
   string,
   {
     encounterDate: string;
     appointmentId: string;
-    candidId: string;
     patientBalanceCents?: number;
   }
 >;
 
 // Lifting up value to outside of the handler allows it to stay in memory across warm lambda invocations
 let m2mToken: string;
-let candidApiClient: CandidApiClient | undefined;
-
-const CANDID_BATCH_SIZE = 3;
 
 const ZAMBDA_NAME = 'get-patient-balances';
+
+// FHIR adjudication category codes (http://terminology.hl7.org/CodeSystem/adjudication).
+const ADJUDICATION_CATEGORY_BENEFIT = 'benefit';
+const ADJUDICATION_CATEGORY_PAID_TO_PROVIDER = 'paidtoprovider';
+// FHIR PaymentStatus codes (http://terminology.hl7.org/CodeSystem/paymentstatus).
+const PAYMENT_STATUS_PAID = 'paid';
 
 export const index = wrapHandler(ZAMBDA_NAME, async (unsafeInput: ZambdaInput): Promise<APIGatewayProxyResult> => {
   const secrets = validateSecrets(unsafeInput.secrets);
@@ -40,22 +39,14 @@ export const index = wrapHandler(ZAMBDA_NAME, async (unsafeInput: ZambdaInput): 
   m2mToken = await checkOrCreateM2MClientToken(m2mToken, secrets);
   const oystehr = createOystehrClient(m2mToken, secrets);
 
-  if (!candidApiClient) {
-    console.group('creating candid api client');
-    candidApiClient = createCandidApiClient(secrets);
-    console.groupEnd();
-    console.debug('creating candid api client success');
-  }
-
-  const response = await performEffect(validatedInput, oystehr, candidApiClient);
+  const response = await performEffect(validatedInput, oystehr);
 
   return lambdaResponse(200, response);
 });
 
 export async function performEffect(
   validatedInput: ValidatedInput,
-  oystehr: Oystehr,
-  candidApiClient: CandidApiClient
+  oystehr: Oystehr
 ): Promise<GetPatientBalancesZambdaOutput> {
   const { patientId } = validatedInput.body;
 
@@ -65,90 +56,42 @@ export async function performEffect(
     pendingPaymentCents: 0,
   };
 
-  console.group('getFhirEncountersAndAppointmentsForPatient');
   const { encounters, appointments } = await getFhirEncountersAndAppointmentsForPatient(oystehr, patientId);
-  console.groupEnd();
-  console.debug('getFhirEncountersAndAppointmentsForPatient success');
   if (encounters.length === 0) {
     return noData;
   }
 
-  const encounterDataMap: EncounterIdMap = new Map();
-  const candidIdToEncounterIdMap = new Map<string, string>();
-  const claimIdToEncounterIdMap = new Map<string, string>();
-
+  const encounterDataMap: EncounterDataMap = new Map();
   encounters.forEach((encounter) => {
     const appointmentId = encounter.appointment?.[0].reference?.split('/')[1];
     const appointment = appointments.find((app) => app.id === appointmentId);
     const encounterDate = appointment?.start;
-    const candidId = encounter.identifier?.find(
-      (identifier) => identifier.system === CANDID_ENCOUNTER_ID_IDENTIFIER_SYSTEM && identifier.value != null
-    )?.value;
-    if (!appointmentId || !encounterDate || !candidId) {
-      console.warn(
-        `Encounter ${encounter.id} is missing required data, skipping it. appointmentId: ${appointmentId}, encounterDate: ${encounterDate}, candidId: ${candidId}`
-      );
+    if (!appointmentId || !encounterDate || !encounter.id) {
       return;
     }
-    encounterDataMap.set(encounter.id!, {
-      encounterDate,
-      appointmentId,
-      candidId,
-    });
-    candidIdToEncounterIdMap.set(candidId, encounter.id!);
+    encounterDataMap.set(encounter.id, { encounterDate, appointmentId });
   });
 
-  console.group('getAllCandidEncounters');
-  const candidEncounters = await getAllCandidEncounters(candidApiClient, encounterDataMap);
-  console.groupEnd();
-  console.debug('getAllCandidEncounters success');
-  if (candidEncounters.length === 0) {
+  if (encounterDataMap.size === 0) {
     return noData;
   }
 
-  // Unpack the array of claims (should only be one) and grab the first claim id
-  console.group('addIdsToMaps');
-  addIdsToMaps(candidEncounters, candidIdToEncounterIdMap, claimIdToEncounterIdMap);
-  console.groupEnd();
-  console.debug('addIdsToMaps success');
-  if (claimIdToEncounterIdMap.size === 0) {
-    return noData;
-  }
+  await populateEncounterBalances(oystehr, encounterDataMap);
+  const pendingPaymentCents = await getPendingPatientPayments(oystehr, patientId);
 
-  console.log('claimIdToEncounterIdMap', claimIdToEncounterIdMap);
+  const returnData = Array.from(encounterDataMap.entries())
+    .filter(([, mapValue]) => (mapValue.patientBalanceCents ?? 0) > 0)
+    .map(([encounterId, mapValue]) => ({
+      encounterId,
+      encounterDate: mapValue.encounterDate,
+      appointmentId: mapValue.appointmentId,
+      patientBalanceCents: mapValue.patientBalanceCents ?? 0,
+    }));
 
-  // For each Candid claim id, call the Candid invoice itemization API endpoint
-  console.group('getAllCandidClaims');
-  const claims = await getAllCandidClaims(candidApiClient, claimIdToEncounterIdMap);
-  console.groupEnd();
-  console.debug('getAllCandidClaims success');
-  if (claims.length === 0) {
-    return noData;
-  }
-
-  // Save the balances in the map
-  console.group('saveBalancesInMap');
-  saveBalancesInMap(claims, claimIdToEncounterIdMap, encounterDataMap);
-  console.groupEnd();
-  console.debug('saveBalancesInMap success');
-
-  console.group('getPendingPatientPayments');
-  const pendingPatientPayments = await getPendingPatientPayments(candidApiClient, patientId);
-  console.groupEnd();
-  console.debug('getPendingPatientPayments success');
-
-  console.log('encounterDataMap', encounterDataMap);
-
-  const returnData = Array.from(encounterDataMap.entries()).map(([encounterId, mapValue]) => ({
-    encounterId,
-    encounterDate: mapValue.encounterDate,
-    appointmentId: mapValue.appointmentId,
-    patientBalanceCents: mapValue.patientBalanceCents || 0,
-  }));
   return {
     encounters: returnData,
     totalBalanceCents: returnData.reduce((acc, { patientBalanceCents }) => acc + patientBalanceCents, 0),
-    pendingPaymentCents: pendingPatientPayments || 0,
+    pendingPaymentCents,
   };
 }
 
@@ -159,161 +102,120 @@ async function getFhirEncountersAndAppointmentsForPatient(
   const resourcesResponse = await oystehr.fhir.search<Encounter | Appointment>({
     resourceType: 'Encounter',
     params: [
-      {
-        name: 'subject',
-        value: `Patient/${patientId}`,
-      },
-      {
-        name: '_include',
-        value: 'Encounter:appointment',
-      },
+      { name: 'subject', value: `Patient/${patientId}` },
+      { name: '_include', value: 'Encounter:appointment' },
       // exclude follow-up encounters that are missing appointment references
-      {
-        name: 'appointment:missing',
-        value: 'false',
-      },
+      { name: 'appointment:missing', value: 'false' },
     ],
   });
   const resources = resourcesResponse.unbundle();
-  const encounters = resources.filter((resource) => resource.resourceType === 'Encounter') as Encounter[];
-  const appointments = resources.filter((resource) => resource.resourceType === 'Appointment') as Appointment[];
-  console.log(`Found ${encounters.length} encounters for patient ${patientId}`);
-  return {
-    encounters,
-    appointments,
-  };
+  const encounters = resources.filter((r) => r.resourceType === 'Encounter') as Encounter[];
+  const appointments = resources.filter((r) => r.resourceType === 'Appointment') as Appointment[];
+  return { encounters, appointments };
 }
 
-async function getAllCandidEncounters(
-  candidApiClient: CandidApiClient,
-  encounterIdMap: EncounterIdMap
-): Promise<APIResponse<CandidApi.encounters.v4.Encounter, CandidApi.encounters.v4.get.Error._Unknown>[]> {
-  const candidIds = Array.from(encounterIdMap.values()).map(({ candidId }) => candidId);
-  console.log(`Fetching ${candidIds.length} encounters from Candid`);
-  const candidEncounters: APIResponse<CandidApi.encounters.v4.Encounter, CandidApi.encounters.v4.get.Error._Unknown>[] =
-    [];
-  const currentCandidEncounters = chunkThings(candidIds, CANDID_BATCH_SIZE);
-  for (const batch of currentCandidEncounters) {
-    const batchResults = await Promise.all(
-      batch.map((candidId) =>
-        retryWithBackoff(() => candidApiClient.encounters.v4.get(CandidApi.EncounterId(candidId)))
-      )
-    );
-    candidEncounters.push(...batchResults);
+function dollarsToCents(value: number | undefined): number {
+  if (value == null || Number.isNaN(value)) return 0;
+  return Math.round(value * 100);
+}
+
+// Exported for unit testing.
+export function sumChargedCents(claims: Claim[]): number {
+  let charged = 0;
+  for (const claim of claims) {
+    for (const item of claim.item ?? []) {
+      charged += dollarsToCents(item.net?.value ?? item.unitPrice?.value);
+    }
   }
-  console.log(`Fetched ${candidEncounters.length} Candid encounters`);
-  return candidEncounters;
+  return charged;
 }
 
-function addIdsToMaps(
-  candidEncounters: APIResponse<CandidApi.encounters.v4.Encounter, CandidApi.encounters.v4.get.Error._Unknown>[],
-  candidIdToEncounterIdMap: Map<string, string>,
-  claimIdToEncounterIdMap: Map<string, string>
-): void {
-  candidEncounters.forEach((candidEncounter) => {
-    if (!candidEncounter.ok) {
-      throw new Error(`Failed to fetch Candid encounter: ${JSON.stringify(candidEncounter.error)}`);
+// Exported for unit testing.
+export function sumInsurancePaidCents(claimResponses: ClaimResponse[]): number {
+  let insurancePaidCents = 0;
+  for (const cr of claimResponses) {
+    for (const item of cr.item ?? []) {
+      for (const adj of item.adjudication ?? []) {
+        const code =
+          adj.category?.coding?.find((c) => c.system?.includes('adjudication'))?.code ??
+          adj.category?.coding?.[0]?.code;
+        if (code === ADJUDICATION_CATEGORY_BENEFIT || code === ADJUDICATION_CATEGORY_PAID_TO_PROVIDER) {
+          insurancePaidCents += dollarsToCents(adj.amount?.value);
+        }
+      }
     }
-
-    const { claims } = candidEncounter.body;
-    if (claims.length !== 1) {
-      throw new Error(`Expected exactly one claim per encounter, but got ${claims.length}`);
-    }
-
-    const candidId = candidEncounter.body.encounterId;
-    const claimId = claims[0].claimId;
-    const encounterId = candidIdToEncounterIdMap.get(candidId);
-
-    claimIdToEncounterIdMap.set(claimId, encounterId!);
-  });
-}
-
-async function getAllCandidClaims(
-  candidApiClient: CandidApiClient,
-  claimIdMap: Map<string, string>
-): Promise<APIResponse<CandidApi.patientAr.v1.InvoiceItemizationResponse, CandidApi.patientAr.v1.itemize.Error>[]> {
-  const claimIds = Array.from(claimIdMap.keys());
-  console.log(`Fetching ${claimIds.length} claims from Candid`);
-  const claims: APIResponse<CandidApi.patientAr.v1.InvoiceItemizationResponse, CandidApi.patientAr.v1.itemize.Error>[] =
-    [];
-  const currentClaims = chunkThings(claimIds, CANDID_BATCH_SIZE);
-  for (const batch of currentClaims) {
-    const batchResults = await Promise.all(
-      batch.map((claimId) => retryWithBackoff(() => candidApiClient.patientAr.v1.itemize(CandidApi.ClaimId(claimId))))
-    );
-    claims.push(...batchResults);
   }
-  console.log(`Fetched ${claims.length} claims`);
-  return claims;
+  return insurancePaidCents;
 }
 
-function saveBalancesInMap(
-  candidClaims: APIResponse<CandidApi.patientAr.v1.InvoiceItemizationResponse, CandidApi.patientAr.v1.itemize.Error>[],
-  claimIdToEncounterIdMap: Map<string, string>,
-  encounterDataMap: EncounterIdMap
-): void {
-  candidClaims.forEach((candidClaim) => {
-    if (!candidClaim.ok) {
-      throw new Error(`Failed to fetch Candid claim: ${JSON.stringify(candidClaim.error)}`);
-    }
-
-    const claimId = candidClaim.body.claimId;
-    const encounterId = claimIdToEncounterIdMap.get(claimId);
-
-    if (candidClaim.body.patientBalanceCents <= 0) {
-      encounterDataMap.delete(encounterId!);
-      return;
-    }
-
-    const mapValue = encounterDataMap.get(encounterId!);
-    if (!mapValue) {
-      throw new Error(`No map value found for encounterId ${encounterId}`);
-    }
-    mapValue.patientBalanceCents = candidClaim.body.patientBalanceCents;
-    encounterDataMap.set(encounterId!, mapValue);
-  });
+function getPaymentNoticeStatusCode(notice: PaymentNotice): string | undefined {
+  return (
+    notice.paymentStatus?.coding?.find((c) => c.system?.includes('paymentstatus'))?.code ??
+    notice.paymentStatus?.coding?.[0]?.code
+  );
 }
 
-async function getPendingPatientPayments(candidApiClient: CandidApiClient, patientId: string): Promise<number> {
-  const candidResponse = await candidApiClient.patientPayments.v4.getMulti({
-    patientExternalId: CandidApi.PatientExternalId(patientId),
-  });
-  if (!candidResponse.ok) {
-    throw new Error(`Failed to fetch Candid pending payments: ${JSON.stringify(candidResponse.error)}`);
+// Exported for unit testing.
+export function sumPaidPaymentNoticeCents(notices: PaymentNotice[]): number {
+  return notices.reduce((acc, n) => {
+    return getPaymentNoticeStatusCode(n) === PAYMENT_STATUS_PAID ? acc + dollarsToCents(n.amount?.value) : acc;
+  }, 0);
+}
+
+async function populateEncounterBalances(oystehr: Oystehr, encounterDataMap: EncounterDataMap): Promise<void> {
+  for (const encounterId of encounterDataMap.keys()) {
+    const claimBundle = (
+      await oystehr.fhir.search<Claim | ClaimResponse>({
+        resourceType: 'Claim',
+        params: [
+          { name: 'encounter', value: `Encounter/${encounterId}` },
+          { name: '_revinclude', value: 'ClaimResponse:request' },
+        ],
+      })
+    ).unbundle();
+
+    const claims = claimBundle.filter((r): r is Claim => r.resourceType === 'Claim');
+    if (claims.length === 0) {
+      continue;
+    }
+    const claimResponses = claimBundle.filter((r): r is ClaimResponse => r.resourceType === 'ClaimResponse');
+
+    const chargedCents = sumChargedCents(claims);
+    const insurancePaidCents = sumInsurancePaidCents(claimResponses);
+
+    const paidNotices = (
+      await oystehr.fhir.search<PaymentNotice>({
+        resourceType: 'PaymentNotice',
+        params: [{ name: 'request', value: `Encounter/${encounterId}` }],
+      })
+    ).unbundle();
+    const paidPatientCents = sumPaidPaymentNoticeCents(paidNotices);
+
+    const balanceCents = Math.max(0, chargedCents - insurancePaidCents - paidPatientCents);
+    const mapValue = encounterDataMap.get(encounterId);
+    if (mapValue) {
+      mapValue.patientBalanceCents = balanceCents;
+      encounterDataMap.set(encounterId, mapValue);
+    }
   }
-  const payments = candidResponse.body.items;
-
-  const pendingPayments = payments.map((payment) => {
-    const isPending = payment.allocations.find((allocation) => allocation.target.type === 'appointment');
-    return isPending ? payment.amountCents : 0;
-  });
-
-  return pendingPayments.reduce((acc, amount) => acc + amount, 0);
 }
 
-async function retryWithBackoff<T, E>(
-  fn: () => Promise<APIResponse<T, E>>,
-  maxRetries = 4,
-  baseDelayMs = 200
-): Promise<APIResponse<T, E>> {
-  for (let attempt = 0; attempt <= maxRetries; attempt++) {
-    try {
-      const response = await fn();
-      if (response.ok || (response.error && response.rawResponse.status !== 429) || attempt === maxRetries)
-        return response;
-    } catch (error: any) {
-      if (attempt === maxRetries) throw error;
-      const isTooManyRequests =
-        error?.body?.errorName === 'TooManyRequestsError' ||
-        error?.message?.includes('Too many requests') ||
-        error?.statusCode === 429;
-      if (!isTooManyRequests) throw error;
+// "Pending" patient payments are PaymentNotices for the patient that have not yet been
+// settled (paymentStatus is absent or anything other than "paid"). Completed (paid) payments
+// are already netted out per-encounter in populateEncounterBalances and are excluded here.
+async function getPendingPatientPayments(oystehr: Oystehr, patientId: string): Promise<number> {
+  const notices = (
+    await oystehr.fhir.search<PaymentNotice>({
+      resourceType: 'PaymentNotice',
+      params: [{ name: 'request.patient._id', value: patientId }],
+    })
+  ).unbundle();
+
+  let pending = 0;
+  for (const n of notices) {
+    if (getPaymentNoticeStatusCode(n) !== PAYMENT_STATUS_PAID) {
+      pending += dollarsToCents(n.amount?.value);
     }
-    const delay = baseDelayMs * Math.pow(2, attempt) + Math.random() * 100;
-    console.warn(
-      `Candid API request rate limited, retrying in ${Math.round(delay)}ms (attempt ${attempt + 1}/${maxRetries})`
-    );
-    await new Promise((resolve) => setTimeout(resolve, delay));
   }
-  return fn();
+  return pending;
 }

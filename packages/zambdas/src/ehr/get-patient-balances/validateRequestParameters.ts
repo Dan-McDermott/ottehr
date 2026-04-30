@@ -45,28 +45,8 @@ export const validateSecrets = (secrets: Secrets | null): Secrets => {
     throw new Error('Secrets are required');
   }
 
-  const {
-    AUTH0_ENDPOINT,
-    AUTH0_CLIENT,
-    AUTH0_SECRET,
-    AUTH0_AUDIENCE,
-    FHIR_API,
-    PROJECT_API,
-    CANDID_CLIENT_ID,
-    CANDID_CLIENT_SECRET,
-    CANDID_ENV,
-  } = secrets;
-  if (
-    !AUTH0_ENDPOINT ||
-    !AUTH0_CLIENT ||
-    !AUTH0_SECRET ||
-    !AUTH0_AUDIENCE ||
-    !FHIR_API ||
-    !PROJECT_API ||
-    !CANDID_CLIENT_ID ||
-    !CANDID_CLIENT_SECRET ||
-    !CANDID_ENV
-  ) {
+  const { AUTH0_ENDPOINT, AUTH0_CLIENT, AUTH0_SECRET, AUTH0_AUDIENCE, FHIR_API, PROJECT_API } = secrets;
+  if (!AUTH0_ENDPOINT || !AUTH0_CLIENT || !AUTH0_SECRET || !AUTH0_AUDIENCE || !FHIR_API || !PROJECT_API) {
     throw new Error('Missing required secrets');
   }
   return {
@@ -76,8 +56,5 @@ export const validateSecrets = (secrets: Secrets | null): Secrets => {
     AUTH0_AUDIENCE,
     FHIR_API,
     PROJECT_API,
-    CANDID_CLIENT_ID,
-    CANDID_CLIENT_SECRET,
-    CANDID_ENV,
   };
 };
