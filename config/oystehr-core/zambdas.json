@@ -1286,6 +1286,34 @@
       "src": "src/ehr/patient-payments/terminal/finalize-payment/index",
       "zip": ".dist/zips/patient-payments-terminal-finalize-payment.zip"
     },
+    "PATIENT-PAYMENTS-TERMINAL-RH-GET-CONFIG": {
+      "name": "patient-payments-terminal-rh-get-config",
+      "type": "http_auth",
+      "runtime": "nodejs22.x",
+      "src": "src/ehr/patient-payments/terminal/rh-get-config/index",
+      "zip": ".dist/zips/patient-payments-terminal-rh-get-config.zip"
+    },
+    "PATIENT-PAYMENTS-TERMINAL-RH-INITIATE-PAYMENT": {
+      "name": "patient-payments-terminal-rh-initiate-payment",
+      "type": "http_auth",
+      "runtime": "nodejs22.x",
+      "src": "src/ehr/patient-payments/terminal/rh-initiate-payment/index",
+      "zip": ".dist/zips/patient-payments-terminal-rh-initiate-payment.zip"
+    },
+    "PATIENT-PAYMENTS-TERMINAL-RH-CHECK-PAYMENT-STATUS": {
+      "name": "patient-payments-terminal-rh-check-payment-status",
+      "type": "http_auth",
+      "runtime": "nodejs22.x",
+      "src": "src/ehr/patient-payments/terminal/rh-check-payment-status/index",
+      "zip": ".dist/zips/patient-payments-terminal-rh-check-payment-status.zip"
+    },
+    "PATIENT-PAYMENTS-TERMINAL-RH-CANCEL": {
+      "name": "patient-payments-terminal-rh-cancel",
+      "type": "http_auth",
+      "runtime": "nodejs22.x",
+      "src": "src/ehr/patient-payments/terminal/rh-cancel/index",
+      "zip": ".dist/zips/patient-payments-terminal-rh-cancel.zip"
+    },
     "FAILING-ENDPOINT": {
       "name": "failing-endpoint",
       "type": "http_open",
