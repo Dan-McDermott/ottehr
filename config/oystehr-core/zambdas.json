@@ -1837,6 +1837,34 @@
         "criteria": "Communication?category=https://terminology.fhir.oystehr.com/CodeSystem/notification|erx-notification",
         "reason": "Create Task for eRX notification"
       }
+    },
+    "RH-PAYMENT-METHODS-LIST": {
+      "name": "rh-payment-methods-list",
+      "type": "http_auth",
+      "runtime": "nodejs22.x",
+      "src": "src/patient/payment-methods/rh/list/index",
+      "zip": ".dist/zips/rh-payment-methods-list.zip"
+    },
+    "RH-PAYMENT-METHODS-DELETE": {
+      "name": "rh-payment-methods-delete",
+      "type": "http_auth",
+      "runtime": "nodejs22.x",
+      "src": "src/patient/payment-methods/rh/delete/index",
+      "zip": ".dist/zips/rh-payment-methods-delete.zip"
+    },
+    "RH-PAYMENT-METHODS-SETUP": {
+      "name": "rh-payment-methods-setup",
+      "type": "http_auth",
+      "runtime": "nodejs22.x",
+      "src": "src/patient/payment-methods/rh/setup/index",
+      "zip": ".dist/zips/rh-payment-methods-setup.zip"
+    },
+    "RH-PAYMENT-METHODS-SET-DEFAULT": {
+      "name": "rh-payment-methods-set-default",
+      "type": "http_auth",
+      "runtime": "nodejs22.x",
+      "src": "src/patient/payment-methods/rh/set-default/index",
+      "zip": ".dist/zips/rh-payment-methods-set-default.zip"
     }
   },
   "fhirResources": {
