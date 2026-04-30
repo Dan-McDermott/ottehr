@@ -275,7 +275,7 @@ export type GetEligibilityResponse = {
   secondary?: InsuranceCheckStatusWithDate;
 };
 
-export type EligibilityCheckSimpleStatus = 'ELIGIBLE' | 'NOT ELIGIBLE' | 'UNKNOWN';
+export type EligibilityCheckSimpleStatus = 'ELIGIBLE' | 'NOT ELIGIBLE' | 'UNKNOWN' | 'PENDING';
 
 export const mapEligibilityCheckResultToSimpleStatus = (
   result: InsuranceCheckStatusWithDate
@@ -295,6 +295,8 @@ export const mapEligibilityCheckResultToSimpleStatus = (
       };
     case InsuranceEligibilityCheckStatus.eligibilityNotConfirmed:
       return { status: 'NOT ELIGIBLE', dateISO: result.dateISO };
+    case InsuranceEligibilityCheckStatus.eligibilityPending:
+      return { status: 'PENDING', dateISO: result.dateISO };
     default:
       return { status: 'UNKNOWN', dateISO: result.dateISO };
   }
