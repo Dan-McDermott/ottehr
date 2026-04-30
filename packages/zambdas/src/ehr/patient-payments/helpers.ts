@@ -11,7 +11,7 @@ import {
   PatientPaymentDTO,
   PAYMENT_METHOD_EXTENSION_URL,
 } from 'utils';
-import { STRIPE_PAYMENT_ID_SYSTEM } from '../../shared';
+import { RH_PAYMENT_ID_SYSTEM, STRIPE_PAYMENT_ID_SYSTEM } from '../../shared';
 
 interface GetPaymentsForEncounterInput {
   oystehrClient: Oystehr;
@@ -304,6 +304,24 @@ async function buildPaymentDTOs(
   const cardPaymentsNested: PatientPaymentDTO[][] = await Promise.all(
     fhirPaymentNotices.map(async (paymentNotice) => {
       const pnStripeId = paymentNotice.identifier?.find((id) => id.system === STRIPE_PAYMENT_ID_SYSTEM)?.value;
+      const pnRhTransactionId = paymentNotice.identifier?.find((id) => id.system === RH_PAYMENT_ID_SYSTEM)?.value;
+
+      if (!pnStripeId && pnRhTransactionId) {
+        const dateISO = DateTime.fromISO(paymentNotice.created).toISO();
+        if (!dateISO || !paymentNotice.id) return [];
+        return [
+          {
+            paymentMethod: 'card' as const,
+            stripePaymentId: undefined,
+            stripePaymentMethodId: undefined,
+            rhTransactionId: pnRhTransactionId,
+            amountInCents: Math.round((paymentNotice.amount.value ?? 0) * 100),
+            fhirPaymentNotificationId: paymentNotice.id,
+            dateISO,
+          },
+        ];
+      }
+
       if (!pnStripeId) {
         return [];
       }
