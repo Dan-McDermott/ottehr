@@ -1,5 +1,4 @@
 import { APIGatewayProxyResult } from 'aws-lambda';
-import { CandidApiClient } from 'candidhealth';
 import { Organization } from 'fhir/r4b';
 import { getSecret, SecretsKeys } from 'utils';
 import {
@@ -9,10 +8,8 @@ import {
   wrapHandler,
   ZambdaInput,
 } from '../../../shared';
-import { createCandidClientIfConfigured, toggleCandidEmployerPayer, updateCandidEmployerPayer } from '../candid-sync';
 import {
   buildEmployerType,
-  getCandidPayerIdFromOrganization,
   isEmployerOrganization,
   normalizeAddress,
   normalizeEmployerNotesExtension,
@@ -22,7 +19,6 @@ import {
 import { validateRequestParameters } from './validateRequestParameters';
 
 let m2mToken: string;
-let candid: CandidApiClient | null | undefined;
 export const index = wrapHandler('update-employer', async (input: ZambdaInput): Promise<APIGatewayProxyResult> => {
   try {
     const { employerId, name, active, category, identifier, address, contact, secrets } =
@@ -39,8 +35,6 @@ export const index = wrapHandler('update-employer', async (input: ZambdaInput): 
     if (!isEmployerOrganization(existing)) {
       throw new Error(`Organization ${employerId} is not an occupational medicine employer`);
     }
-
-    const updatedCategory = category ?? existing.type?.[0]?.text ?? 'Occupational Medicine';
 
     const mergedIdentifier = (() => {
       if (identifier === undefined) return existing.identifier;
@@ -67,31 +61,6 @@ export const index = wrapHandler('update-employer', async (input: ZambdaInput): 
       },
       { optimisticLockingVersionId: existing.meta?.versionId }
     );
-
-    // Sync to Candid if the organization has a Candid payer ID (best-effort)
-    if (candid === undefined) {
-      candid = createCandidClientIfConfigured(secrets);
-    }
-    if (candid) {
-      const candidPayerId = getCandidPayerIdFromOrganization(updated);
-      if (candidPayerId) {
-        await updateCandidEmployerPayer(
-          candid,
-          candidPayerId,
-          updated.name ?? existing.name ?? '',
-          updatedCategory,
-          updated.address
-        );
-
-        // If active status changed, toggle enablement in Candid as well
-        const activeChanged = active !== undefined && active !== existing.active;
-        if (activeChanged) {
-          await toggleCandidEmployerPayer(candid, candidPayerId, active);
-        }
-      } else {
-        console.log(`[update-employer] No Candid payer ID on Organization ${employerId} — skipping Candid sync`);
-      }
-    }
 
     return {
       statusCode: 200,

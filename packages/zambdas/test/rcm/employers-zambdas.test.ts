@@ -16,11 +16,6 @@ const mockOystehrClient = {
   },
 };
 
-const mockCreateCandidClientIfConfigured = vi.fn();
-const mockCreateCandidEmployerPayer = vi.fn();
-const mockUpdateCandidEmployerPayer = vi.fn();
-const mockToggleCandidEmployerPayer = vi.fn();
-
 vi.mock('../../src/shared', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>();
   return {
@@ -30,13 +25,6 @@ vi.mock('../../src/shared', async (importOriginal) => {
     wrapHandler: (_name: string, fn: (...args: unknown[]) => unknown) => fn,
   };
 });
-
-vi.mock('../../src/rcm/employers/candid-sync', () => ({
-  createCandidClientIfConfigured: mockCreateCandidClientIfConfigured,
-  createCandidEmployerPayer: mockCreateCandidEmployerPayer,
-  updateCandidEmployerPayer: mockUpdateCandidEmployerPayer,
-  toggleCandidEmployerPayer: mockToggleCandidEmployerPayer,
-}));
 
 type ZambdaHandler = (input: ZambdaInput) => Promise<APIGatewayProxyResult>;
 
@@ -74,7 +62,6 @@ describe('RCM employer zambdas', () => {
   beforeEach(async () => {
     vi.clearAllMocks();
     vi.resetModules();
-    mockCreateCandidClientIfConfigured.mockReturnValue(null);
 
     ({ index: createEmployerHandler } = (await import('../../src/rcm/employers/create-employer/index')) as {
       index: ZambdaHandler;
@@ -87,66 +74,27 @@ describe('RCM employer zambdas', () => {
     });
   });
 
-  it('create-employer creates org and persists Candid payer id when Candid sync succeeds', async () => {
+  it('create-employer creates the FHIR Organization and returns it', async () => {
     const created = makeEmployer({ identifier: undefined });
-    const updated = makeEmployer({
-      identifier: [
-        {
-          system: 'https://api.joincandidhealth.com/api/non-insurance-payers/v1/response/non_insurance_payer_id',
-          value: 'candid-payer-1',
-        },
-      ],
-    });
-
     mockOystehrClient.fhir.create.mockResolvedValue(created);
-    mockOystehrClient.fhir.update.mockResolvedValue(updated);
-    mockCreateCandidClientIfConfigured.mockReturnValue({});
-    mockCreateCandidEmployerPayer.mockResolvedValue('candid-payer-1');
 
     const result = await createEmployerHandler(makeInput({ name: 'Wayne Enterprises' }));
 
     expect(result.statusCode).toBe(200);
     expect(mockOystehrClient.fhir.create).toHaveBeenCalledTimes(1);
-    expect(mockCreateCandidEmployerPayer).toHaveBeenCalledWith(
-      {},
-      'Wayne Enterprises',
-      'Occupational Medicine',
-      created.address
-    );
-    expect(mockOystehrClient.fhir.update).toHaveBeenCalledTimes(1);
-    expect(JSON.parse(result.body).identifier[0].value).toBe('candid-payer-1');
-  });
-
-  it('create-employer skips Candid sync when client is not configured', async () => {
-    const created = makeEmployer();
-    mockOystehrClient.fhir.create.mockResolvedValue(created);
-
-    const result = await createEmployerHandler(makeInput({ name: 'Wayne Enterprises' }));
-
-    expect(result.statusCode).toBe(200);
-    expect(mockCreateCandidEmployerPayer).not.toHaveBeenCalled();
     expect(mockOystehrClient.fhir.update).not.toHaveBeenCalled();
+    expect(JSON.parse(result.body).name).toBe('Wayne Enterprises');
   });
 
-  it('update-employer updates FHIR and Candid when org has Candid identifier', async () => {
-    const existing = makeEmployer({
-      meta: { versionId: '3' },
-      identifier: [
-        {
-          system: 'https://api.joincandidhealth.com/api/non-insurance-payers/v1/response/non_insurance_payer_id',
-          value: 'candid-payer-1',
-        },
-      ],
-    });
+  it('update-employer updates the FHIR Organization with the supplied fields', async () => {
+    const existing = makeEmployer({ meta: { versionId: '3' } });
     const updated = makeEmployer({
       name: 'Wayne Ent',
       type: [{ ...employerType[0], text: 'Occupational Medicine' }],
-      identifier: existing.identifier,
     });
 
     mockOystehrClient.fhir.get.mockResolvedValue(existing);
     mockOystehrClient.fhir.update.mockResolvedValue(updated);
-    mockCreateCandidClientIfConfigured.mockReturnValue({});
 
     const result = await updateEmployerHandler(
       makeInput({ employerId: EMPLOYER_ID, name: 'Wayne Ent', category: 'Occupational Medicine' })
@@ -154,34 +102,18 @@ describe('RCM employer zambdas', () => {
 
     expect(result.statusCode).toBe(200);
     expect(mockOystehrClient.fhir.update).toHaveBeenCalledTimes(1);
-    expect(mockUpdateCandidEmployerPayer).toHaveBeenCalledWith(
-      {},
-      'candid-payer-1',
-      'Wayne Ent',
-      'Occupational Medicine',
-      updated.address
+    expect(mockOystehrClient.fhir.update).toHaveBeenCalledWith(
+      expect.objectContaining({ name: 'Wayne Ent' }),
+      expect.objectContaining({ optimisticLockingVersionId: '3' })
     );
   });
 
-  it('update-employer toggles active true in FHIR and Candid', async () => {
-    const existing = makeEmployer({
-      active: false,
-      meta: { versionId: '7' },
-      identifier: [
-        {
-          system: 'https://api.joincandidhealth.com/api/non-insurance-payers/v1/response/non_insurance_payer_id',
-          value: 'candid-payer-2',
-        },
-      ],
-    });
-    const updated = makeEmployer({
-      active: true,
-      identifier: existing.identifier,
-    });
+  it('update-employer toggles active true on the FHIR Organization', async () => {
+    const existing = makeEmployer({ active: false, meta: { versionId: '7' } });
+    const updated = makeEmployer({ active: true });
 
     mockOystehrClient.fhir.get.mockResolvedValue(existing);
     mockOystehrClient.fhir.update.mockResolvedValue(updated);
-    mockCreateCandidClientIfConfigured.mockReturnValue({});
 
     const result = await updateEmployerHandler(makeInput({ employerId: EMPLOYER_ID, active: true }));
 
@@ -190,28 +122,14 @@ describe('RCM employer zambdas', () => {
       expect.objectContaining({ active: true }),
       expect.objectContaining({ optimisticLockingVersionId: '7' })
     );
-    expect(mockToggleCandidEmployerPayer).toHaveBeenCalledWith({}, 'candid-payer-2', true);
   });
 
-  it('update-employer toggles active false in FHIR and Candid', async () => {
-    const existing = makeEmployer({
-      active: true,
-      meta: { versionId: '8' },
-      identifier: [
-        {
-          system: 'https://api.joincandidhealth.com/api/non-insurance-payers/v1/response/non_insurance_payer_id',
-          value: 'candid-payer-3',
-        },
-      ],
-    });
-    const updated = makeEmployer({
-      active: false,
-      identifier: existing.identifier,
-    });
+  it('update-employer toggles active false on the FHIR Organization', async () => {
+    const existing = makeEmployer({ active: true, meta: { versionId: '8' } });
+    const updated = makeEmployer({ active: false });
 
     mockOystehrClient.fhir.get.mockResolvedValue(existing);
     mockOystehrClient.fhir.update.mockResolvedValue(updated);
-    mockCreateCandidClientIfConfigured.mockReturnValue({});
 
     const result = await updateEmployerHandler(makeInput({ employerId: EMPLOYER_ID, active: false }));
 
@@ -220,7 +138,6 @@ describe('RCM employer zambdas', () => {
       expect.objectContaining({ active: false }),
       expect.objectContaining({ optimisticLockingVersionId: '8' })
     );
-    expect(mockToggleCandidEmployerPayer).toHaveBeenCalledWith({}, 'candid-payer-3', false);
   });
 
   it('list-employers returns all organizations from search results', async () => {

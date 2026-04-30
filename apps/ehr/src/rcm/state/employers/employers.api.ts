@@ -2,9 +2,6 @@ import Oystehr from '@oystehr/sdk';
 import { Organization } from 'fhir/r4b';
 import { chooseJson } from 'utils';
 
-export const CANDID_NON_INSURANCE_PAYER_IDENTIFIER_SYSTEM =
-  'https://api.joincandidhealth.com/api/non-insurance-payers/v1/response/non_insurance_payer_id';
-
 const CREATE_EMPLOYER_ZAMBDA_ID = 'create-employer';
 const LIST_EMPLOYERS_ZAMBDA_ID = 'list-employers';
 const UPDATE_EMPLOYER_ZAMBDA_ID = 'update-employer';
