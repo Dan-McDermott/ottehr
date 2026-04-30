@@ -1,17 +1,14 @@
 import Oystehr from '@oystehr/sdk';
 import { captureException } from '@sentry/aws-serverless';
 import { APIGatewayProxyResult } from 'aws-lambda';
-import { CandidApi, CandidApiClient } from 'candidhealth';
-import { InventoryRecord, InvoiceItemizationResponse } from 'candidhealth/api/resources/patientAr/resources/v1';
-import { Encounter, Resource, Task } from 'fhir/r4b';
+import { Claim, ClaimResponse, Encounter, PaymentNotice, Task } from 'fhir/r4b';
 import { DateTime } from 'luxon';
 import {
-  createCandidApiClient,
   createReference,
-  getCandidInventoryPages,
-  getResourcesFromBatchInlineRequests,
   InvoiceTaskInput,
   mapDisplayToInvoiceTaskStatus,
+  RCM_TASK_SYSTEM,
+  RcmTaskCode,
   RcmTaskCodings,
   ZERO_BALANCE_BUSINESS_STATUS,
 } from 'utils';
@@ -21,62 +18,49 @@ import {
   ParsedInvoicingConfig,
   parseInvoicingConfig,
 } from '../../rcm/invoice-config/helpers';
-import {
-  CANDID_ENCOUNTER_ID_IDENTIFIER_SYSTEM,
-  checkOrCreateM2MClientToken,
-  createOystehrClient,
-  getCandidEncounterIdFromEncounter,
-  wrapHandler,
-  ZambdaInput,
-} from '../../shared';
+import { checkOrCreateM2MClientToken, createOystehrClient, wrapHandler, ZambdaInput } from '../../shared';
 
 let m2mToken: string;
-let candid: CandidApiClient | undefined;
 
 const ZAMBDA_NAME = 'create-invoices-tasks';
 const readyTaskStatus = mapDisplayToInvoiceTaskStatus('ready');
-const BATCH_CHUNK_SIZE = 25;
+const LOOKBACK_DAYS = 2;
 
-async function getResourcesFromParallelBatches(oystehr: Oystehr, requests: string[]): Promise<Resource[]> {
-  const chunks: string[][] = [];
-  for (let i = 0; i < requests.length; i += BATCH_CHUNK_SIZE) {
-    chunks.push(requests.slice(i, i + BATCH_CHUNK_SIZE));
-  }
-  const results = await Promise.all(chunks.map((chunk) => getResourcesFromBatchInlineRequests(oystehr, chunk)));
-  return results.flat();
-}
+// FHIR adjudication category codes (http://terminology.hl7.org/CodeSystem/adjudication).
+const ADJUDICATION_CATEGORY_BENEFIT = 'benefit';
+const ADJUDICATION_CATEGORY_PAID_TO_PROVIDER = 'paidtoprovider';
+// FHIR PaymentStatus codes (http://terminology.hl7.org/CodeSystem/paymentstatus).
+const PAYMENT_STATUS_PAID = 'paid';
 
 interface EncounterPackage {
   encounter: Encounter;
-  claim: InventoryRecord;
-  invoiceTask?: Task;
+  claim: Claim;
   amountCents: number;
+  finalizationDateIso: string;
+  externalClaimId: string;
 }
 
 export const index = wrapHandler(ZAMBDA_NAME, async (input: ZambdaInput): Promise<APIGatewayProxyResult> => {
   const { secrets } = input;
   m2mToken = await checkOrCreateM2MClientToken(m2mToken, secrets);
   const oystehr = createOystehrClient(m2mToken, secrets);
-  if (!candid) {
-    candid = createCandidApiClient(secrets);
-  }
 
   console.log('Fetching invoicing config from FHIR');
   const { questionnaireResponse } = await getOrCreateInvoicingConfig(oystehr);
   const invoicingConfig = parseInvoicingConfig(questionnaireResponse);
   console.log('Invoicing config loaded, dueDays:', invoicingConfig.dueDaysFromGeneration);
 
-  const twoDaysAgo = DateTime.now().minus({ days: 2 });
-  console.log('Fetching invoiceable Candid claims since:', twoDaysAgo.toISO());
-  const candidClaims = await getAllCandidClaims(candid, twoDaysAgo);
+  const since = DateTime.now().minus({ days: LOOKBACK_DAYS });
+  console.log('Fetching FHIR Claims created since:', since.toISO());
+  const claimsByEncounterId = await getRecentClaimsByEncounter(oystehr, since);
 
-  const packagesToCreate = await getEncountersWithoutTaskFhir(oystehr, candid, candidClaims);
+  const packagesToCreate = await buildPackagesForEncountersWithoutTask(oystehr, claimsByEncounterId);
 
   console.log(
     `Packages to create tasks for: ${packagesToCreate.length} ${JSON.stringify(
       packagesToCreate.map((p) => ({
         encounterId: p.encounter.id,
-        claimId: p.claim.claimId,
+        claimId: p.externalClaimId,
         amountCents: p.amountCents,
       }))
     )}`
@@ -92,12 +76,11 @@ export const index = wrapHandler(ZAMBDA_NAME, async (input: ZambdaInput): Promis
 
 function getInvoiceTaskInput(
   claimId: string,
-  finalizationDate: Date,
+  finalizationDateIso: string,
   patientBalanceInCents: number,
   config: ParsedInvoicingConfig
 ): InvoiceTaskInput {
   const dueDate = DateTime.now().plus({ days: config.dueDaysFromGeneration }).toISODate();
-  const finalizationDateIso = finalizationDate.toISOString();
 
   return {
     smsTextMessage: config.defaultSmsTemplate,
@@ -115,15 +98,15 @@ export async function createTaskForEncounter(
   config: ParsedInvoicingConfig
 ): Promise<void> {
   try {
-    const { encounter, claim, amountCents } = encounterPkg;
+    const { encounter, amountCents, finalizationDateIso, externalClaimId } = encounterPkg;
     const patientId = encounter.subject?.reference?.replace('Patient/', '');
 
     if (!patientId) throw new Error('Patient ID not found in encounter: ' + encounter.id);
 
-    const prefilledInvoiceInfo = getInvoiceTaskInput(claim.claimId, claim.timestamp, amountCents, config);
+    const prefilledInvoiceInfo = getInvoiceTaskInput(externalClaimId, finalizationDateIso, amountCents, config);
 
     console.log(
-      `Creating task. patient: ${claim.patientExternalId}, claim: ${claim.claimId}, encounter: ${encounter.id}, balance (cents): ${amountCents}`
+      `Creating task. patient: ${patientId}, claim: ${externalClaimId}, encounter: ${encounter.id}, balance (cents): ${amountCents}`
     );
 
     const task: Task = {
@@ -146,165 +129,203 @@ export async function createTaskForEncounter(
 
     const created = await oystehr.fhir.create(task);
 
-    console.log(`Created task: ${created.id} (encounter: ${encounter.id}, claim: ${claim.claimId})`);
+    console.log(`Created task: ${created.id} (encounter: ${encounter.id}, claim: ${externalClaimId})`);
   } catch (error) {
     console.error(
-      `Failed to create task for encounter ${encounterPkg.encounter.id}, claim ${encounterPkg.claim.claimId}:`,
+      `Failed to create task for encounter ${encounterPkg.encounter.id}, claim ${encounterPkg.externalClaimId}:`,
       error
     );
 
     captureException(error, {
       tags: {
-        claimId: encounterPkg.claim.claimId,
+        claimId: encounterPkg.externalClaimId,
         encounterId: encounterPkg.encounter.id,
       },
     });
   }
 }
 
-export async function getEncountersWithoutTaskFhir(
+function dollarsToCents(value: number | undefined): number {
+  if (value == null || Number.isNaN(value)) return 0;
+  return Math.round(value * 100);
+}
+
+// Exported for unit testing.
+export function sumChargedCents(claims: Claim[]): number {
+  let charged = 0;
+  for (const claim of claims) {
+    for (const item of claim.item ?? []) {
+      charged += dollarsToCents(item.net?.value ?? item.unitPrice?.value);
+    }
+  }
+  return charged;
+}
+
+// Exported for unit testing.
+export function sumInsurancePaidCents(claimResponses: ClaimResponse[]): number {
+  let insurancePaidCents = 0;
+  for (const cr of claimResponses) {
+    for (const item of cr.item ?? []) {
+      for (const adj of item.adjudication ?? []) {
+        const code =
+          adj.category?.coding?.find((c) => c.system?.includes('adjudication'))?.code ??
+          adj.category?.coding?.[0]?.code;
+        if (code === ADJUDICATION_CATEGORY_BENEFIT || code === ADJUDICATION_CATEGORY_PAID_TO_PROVIDER) {
+          insurancePaidCents += dollarsToCents(adj.amount?.value);
+        }
+      }
+    }
+  }
+  return insurancePaidCents;
+}
+
+// Exported for unit testing.
+export function sumPaidPaymentNoticeCents(notices: PaymentNotice[]): number {
+  return notices.reduce((acc, n) => {
+    const code =
+      n.paymentStatus?.coding?.find((c) => c.system?.includes('paymentstatus'))?.code ??
+      n.paymentStatus?.coding?.[0]?.code;
+    return code === PAYMENT_STATUS_PAID ? acc + dollarsToCents(n.amount?.value) : acc;
+  }, 0);
+}
+
+function getEncounterIdFromClaim(claim: Claim): string | undefined {
+  // FHIR R4 references the Encounter at the item level (Claim.item[].encounter[]).
+  for (const item of claim.item ?? []) {
+    for (const enc of item.encounter ?? []) {
+      const ref = enc.reference;
+      if (ref?.startsWith('Encounter/')) return ref.slice('Encounter/'.length);
+    }
+  }
+  return undefined;
+}
+
+function getExternalClaimId(claim: Claim): string {
+  // Prefer a stable external identifier (e.g. X12 CLM01) when available; fall back to FHIR id.
+  return claim.identifier?.[0]?.value ?? claim.id ?? '';
+}
+
+// Discover Claims authored within the lookback window and group them by Encounter id.
+// Multiple Claims per Encounter are kept; we use the latest-by-`created` for task metadata.
+export async function getRecentClaimsByEncounter(oystehr: Oystehr, since: DateTime): Promise<Map<string, Claim[]>> {
+  const sinceIso = since.toISO();
+  const bundle = (
+    await oystehr.fhir.search<Claim | Encounter>({
+      resourceType: 'Claim',
+      params: [
+        { name: 'created', value: `ge${sinceIso}` },
+        { name: '_include', value: 'Claim:encounter' },
+      ],
+    })
+  ).unbundle();
+
+  const claims = bundle.filter((r): r is Claim => r.resourceType === 'Claim');
+  const byEncounter = new Map<string, Claim[]>();
+  for (const claim of claims) {
+    const encounterId = getEncounterIdFromClaim(claim);
+    if (!encounterId) continue;
+    const list = byEncounter.get(encounterId) ?? [];
+    list.push(claim);
+    byEncounter.set(encounterId, list);
+  }
+  console.log(`Found ${claims.length} Claims across ${byEncounter.size} Encounters since ${sinceIso}`);
+  return byEncounter;
+}
+
+// Returns the set of Encounter ids that already have a sendInvoiceToPatient Task.
+export async function findEncountersWithExistingInvoiceTask(
   oystehr: Oystehr,
-  candid: CandidApiClient,
-  claims: InventoryRecord[]
-): Promise<EncounterPackage[]> {
-  if (claims.length === 0) {
-    console.log('No claims to check for existing FHIR tasks');
-    return [];
-  }
-
-  console.log(`Checking ${claims.length} Candid claims for existing FHIR tasks`);
-
-  const fhirResources = await getResourcesFromParallelBatches(
-    oystehr,
-    claims.map(
-      (claim) =>
-        `Encounter?identifier=${CANDID_ENCOUNTER_ID_IDENTIFIER_SYSTEM}|${claim.encounterId}&_has:Task:encounter:code=${RcmTaskCodings.sendInvoiceToPatient.coding?.[0].system}|${RcmTaskCodings.sendInvoiceToPatient.coding?.[0].code}`
-    )
-  );
-  const allEncountersCandidIds = claims.map((claim) => claim.encounterId);
-  const allEncountersCandidIdsWithTasks = fhirResources
-    .filter((res) => res.resourceType === 'Encounter')
-    .map((res) => getCandidEncounterIdFromEncounter(res as Encounter));
-  const candidEncountersIdsWithoutTasks = allEncountersCandidIds.filter(
-    (id) => !allEncountersCandidIdsWithTasks.includes(id)
-  );
-
-  console.log(
-    `Candid encounters: ${claims.length} total, ${allEncountersCandidIdsWithTasks.length} already have a task, ${candidEncountersIdsWithoutTasks.length} need one`
-  );
-
-  if (candidEncountersIdsWithoutTasks.length === 0) {
-    console.log('No Candid encounters without tasks found');
-    return [];
-  }
-
-  const encountersWithoutTasksResponse = await getResourcesFromParallelBatches(
-    oystehr,
-    candidEncountersIdsWithoutTasks.map(
-      (claimId) => `Encounter?identifier=${CANDID_ENCOUNTER_ID_IDENTIFIER_SYSTEM}|${claimId}`
-    )
-  );
-
-  const encountersWithoutTasks = encountersWithoutTasksResponse.filter(
-    (res) => res.resourceType === 'Encounter'
-  ) as Encounter[];
-
-  console.log(
-    `FHIR encounters found for ${encountersWithoutTasks.length} of ${candidEncountersIdsWithoutTasks.length} Candid IDs without a task`
-  );
-
-  const result: Omit<EncounterPackage, 'amountCents' | 'invoiceTask'>[] = [];
-  encountersWithoutTasks.forEach((encounter) => {
-    const candidId = getCandidEncounterIdFromEncounter(encounter);
-    const claim = claims.find((claim) => claim.encounterId === candidId);
-
-    if (claim) {
-      result.push({ encounter, claim });
-    } else {
-      console.warn(`No Candid claim matched FHIR encounter ${encounter.id} (candidId: ${candidId})`);
+  encounterIds: string[]
+): Promise<Set<string>> {
+  if (encounterIds.length === 0) return new Set();
+  const tasks = (
+    await oystehr.fhir.search<Task>({
+      resourceType: 'Task',
+      params: [
+        { name: 'code', value: `${RCM_TASK_SYSTEM}|${RcmTaskCode.sendInvoiceToPatient}` },
+        { name: 'encounter', value: encounterIds.map((id) => `Encounter/${id}`).join(',') },
+      ],
+    })
+  ).unbundle();
+  const result = new Set<string>();
+  for (const task of tasks) {
+    const ref = task.encounter?.reference;
+    if (ref?.startsWith('Encounter/')) {
+      result.add(ref.slice('Encounter/'.length));
     }
-  });
-
-  if (candidEncountersIdsWithoutTasks.length !== encountersWithoutTasks.length) {
-    const missingIds = candidEncountersIdsWithoutTasks.filter(
-      (id) => !encountersWithoutTasks.some((enc) => getCandidEncounterIdFromEncounter(enc) === id)
-    );
-
-    console.warn(`Candid encounter IDs with no matching FHIR encounter: ${JSON.stringify(missingIds)}`);
   }
-
-  return await populateAmountInPackages(candid, result);
+  return result;
 }
 
-export async function populateAmountInPackages(
-  candid: CandidApiClient,
-  packages: Omit<EncounterPackage, 'amountCents'>[]
+// Compute the patient balance for a single Encounter using the same FHIR formula as
+// `get-patient-balances`: charged − insurance-paid − patient-paid (floored at zero).
+async function computeEncounterPatientBalance(
+  oystehr: Oystehr,
+  encounterId: string,
+  knownClaims: Claim[]
+): Promise<number> {
+  const claimResponseBundle = (
+    await oystehr.fhir.search<ClaimResponse>({
+      resourceType: 'ClaimResponse',
+      params: [{ name: 'request', value: `Encounter/${encounterId}` }],
+    })
+  ).unbundle();
+  const claimResponses = claimResponseBundle.filter((r): r is ClaimResponse => r.resourceType === 'ClaimResponse');
+
+  const paidNotices = (
+    await oystehr.fhir.search<PaymentNotice>({
+      resourceType: 'PaymentNotice',
+      params: [{ name: 'request', value: `Encounter/${encounterId}` }],
+    })
+  ).unbundle();
+
+  const chargedCents = sumChargedCents(knownClaims);
+  const insurancePaidCents = sumInsurancePaidCents(claimResponses);
+  const paidPatientCents = sumPaidPaymentNoticeCents(paidNotices);
+  return Math.max(0, chargedCents - insurancePaidCents - paidPatientCents);
+}
+
+// For each Encounter that has Claim activity in the window and no existing invoice Task,
+// compute its patient balance and assemble an EncounterPackage.
+export async function buildPackagesForEncountersWithoutTask(
+  oystehr: Oystehr,
+  claimsByEncounterId: Map<string, Claim[]>
 ): Promise<EncounterPackage[]> {
-  const itemizationPromises = packages.map((pkg) => candid.patientAr.v1.itemize(CandidApi.ClaimId(pkg.claim.claimId)));
-  const itemizationResponse = await Promise.all(itemizationPromises);
+  if (claimsByEncounterId.size === 0) return [];
 
-  const resultPackages: EncounterPackage[] = [];
-  itemizationResponse.forEach((res, idx) => {
-    if (!res || !res.ok || !res.body) {
-      const pkg = packages[idx];
-      const claimId = pkg?.claim.claimId;
-      const error = new Error(`Candid itemization failed for claim ${claimId}`);
+  const encounterIds = Array.from(claimsByEncounterId.keys());
+  const withTask = await findEncountersWithExistingInvoiceTask(oystehr, encounterIds);
+  const todoIds = encounterIds.filter((id) => !withTask.has(id));
+  console.log(
+    `Encounters with Claim activity: ${encounterIds.length} total, ${withTask.size} already have a task, ${todoIds.length} need one`
+  );
+  if (todoIds.length === 0) return [];
 
-      console.error(error.message, JSON.stringify(res, null, 2));
+  const encounters = (
+    await oystehr.fhir.search<Encounter>({
+      resourceType: 'Encounter',
+      params: [{ name: '_id', value: todoIds.join(',') }],
+    })
+  ).unbundle();
 
-      captureException(error, {
-        tags: {
-          claimId,
-          encounterId: pkg?.encounter.id,
-        },
-      });
-      return;
-    }
+  const packages: EncounterPackage[] = [];
+  for (const encounter of encounters) {
+    if (!encounter.id) continue;
+    const claims = claimsByEncounterId.get(encounter.id) ?? [];
+    if (claims.length === 0) continue;
 
-    const itemization = res.body as InvoiceItemizationResponse;
-
-    if (!itemization.claimId) {
-      console.warn(
-        `Itemization response is missing claimId, skipping (input claimId: ${packages[idx]?.claim?.claimId})`
-      );
-
-      return;
-    }
-
-    const incomingPkg = packages.find((pkg) => pkg.claim.claimId === itemization.claimId);
-
-    if (!incomingPkg) {
-      console.warn(`No matching package found for itemization claimId: ${itemization.claimId}`);
-      return;
-    }
-
-    if (!itemization.patientBalanceCents && itemization.patientBalanceCents !== 0) {
-      console.warn(`patientBalanceCents is missing for claim ${itemization.claimId}, skipping`);
-      return;
-    }
-
-    console.log(`Itemization for claim ${itemization.claimId}: patientBalanceCents=${itemization.patientBalanceCents}`);
-    resultPackages.push({
-      ...incomingPkg,
-      amountCents: itemization.patientBalanceCents,
+    // Use the latest claim by created date as the canonical claim for task metadata.
+    const sortedByCreated = [...claims].sort((a, b) => {
+      const aT = a.created ? DateTime.fromISO(a.created).toMillis() : 0;
+      const bT = b.created ? DateTime.fromISO(b.created).toMillis() : 0;
+      return bT - aT;
     });
-  });
+    const claim = sortedByCreated[0];
+    const finalizationDateIso = claim.created ?? DateTime.now().toISO()!;
+    const externalClaimId = getExternalClaimId(claim);
 
-  return resultPackages;
-}
-
-async function getAllCandidClaims(candid: CandidApiClient, sinceDate: DateTime): Promise<InventoryRecord[]> {
-  const inventoryPages = await getCandidInventoryPages({
-    candid,
-    onlyInvoiceable: true,
-    since: sinceDate,
-  });
-
-  const claimsFetched = inventoryPages?.claims ?? [];
-
-  console.log(
-    `Candid inventory returned ${claimsFetched.length} invoiceable claims (pages: ${inventoryPages?.pageCount ?? 0})`
-  );
-
-  return claimsFetched;
+    const amountCents = await computeEncounterPatientBalance(oystehr, encounter.id, claims);
+    packages.push({ encounter, claim, amountCents, finalizationDateIso, externalClaimId });
+  }
+  return packages;
 }
