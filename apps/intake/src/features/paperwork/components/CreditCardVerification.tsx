@@ -10,18 +10,17 @@ import {
   Typography,
   useTheme,
 } from '@mui/material';
-import { Elements } from '@stripe/react-stripe-js';
-import { Stripe } from '@stripe/stripe-js';
-import { FC, useEffect, useMemo, useState } from 'react';
-import { AddCreditCardForm, CreditCardBrandIcon, loadStripe } from 'ui-components';
-import { CreditCardInfo, PaymentMethodSetupZambdaOutput } from 'utils';
+import { FC, useCallback, useEffect, useMemo, useState } from 'react';
+import { CreditCardBrandIcon } from 'ui-components';
+import { RHCreditCardInfo } from 'utils';
 import { BoldPurpleInputLabel } from '../../../components/form';
 import { dataTestIds } from '../../../helpers/data-test-ids';
 import { otherColors } from '../../../IntakeThemeProvider';
-import { useSetDefaultPaymentMethod } from '../../../telemed/features/paperwork/paperwork.queries';
+import { useSetDefaultRHPaymentMethod, useSetupRHPaymentMethod } from '../../../telemed/features/paperwork';
 import { usePaperworkContext } from '../context';
 import { useCreditCardContext } from '../hooks/useCreditCardContext';
 import { useCreditCardStore } from '../stores/useCreditCardStore';
+import { RHAddCreditCardFormStub } from './RHAddCreditCardFormStub';
 
 interface CreditCardVerificationProps {
   fieldId: string;
@@ -33,13 +32,10 @@ interface CreditCardVerificationProps {
 export const CreditCardVerification: FC<CreditCardVerificationProps> = ({ fieldId, onChange, required, value }) => {
   const {
     patient,
-    appointment,
-    paymentMethods: cards,
-    refetchPaymentMethods,
-    refetchSetupData,
-    stripeSetupData: setupData,
-    paymentMethodStateInitializing,
-    cardsAreLoading,
+    rhPaymentMethods: cards,
+    refetchRHPaymentMethods,
+    rhCardsAreLoading,
+    rhPaymentMethodStateInitializing,
   } = usePaperworkContext();
 
   useCreditCardContext({ fieldId, onChange, required, value, hasSavedCards: cards.length > 0 });
@@ -48,21 +44,15 @@ export const CreditCardVerification: FC<CreditCardVerificationProps> = ({ fieldI
   const defaultCard = useMemo(() => cards.find((card) => card.default), [cards]);
   const [selectedOption, setSelectedOption] = useState<string | undefined>(defaultCard?.id);
 
-  const stripePromise = useMemo(
-    () => loadStripe(import.meta.env.VITE_APP_STRIPE_KEY, setupData?.stripeAccount),
-    [setupData?.stripeAccount]
-  );
-
   useEffect(() => {
     if (selectedOption !== defaultCard?.id) {
       setSelectedOption(defaultCard?.id);
     }
   }, [cards, defaultCard?.id, selectedOption]);
 
-  const { mutateAsync: setDefaultAsync, isPending: isSetDefaultLoading } = useSetDefaultPaymentMethod(
-    patient?.id,
-    appointment?.id
-  );
+  const { mutateAsync: setDefaultAsync, isPending: isSetDefaultLoading } = useSetDefaultRHPaymentMethod(patient?.id);
+  const { mutateAsync: setupRHCard, isPending: isSetupCardPending } = useSetupRHPaymentMethod(patient?.id);
+  const isSavingCard = useCreditCardStore((state) => state.isSavingCard);
 
   useEffect(() => {
     if (!onChange) return;
@@ -73,32 +63,58 @@ export const CreditCardVerification: FC<CreditCardVerificationProps> = ({ fieldI
     }
   }, [onChange, selectedOption, value]);
 
-  const disabled = cardsAreLoading || isSetDefaultLoading || paymentMethodStateInitializing;
+  const disabled = rhCardsAreLoading || isSetDefaultLoading || rhPaymentMethodStateInitializing || isSavingCard;
 
-  const onMakePrimary = async (id: string): Promise<void> => {
-    setPendingSelection(id);
-    await setDefaultAsync({
-      paymentMethodId: id,
-      onSuccess: async () => {
+  const onMakePrimary = useCallback(
+    async (id: string): Promise<void> => {
+      setPendingSelection(id);
+      await setDefaultAsync({
+        paymentMethodId: id,
+        onSuccess: async () => {
+          if (value !== true && onChange) {
+            onChange({ target: { value: true } });
+          }
+          await refetchRHPaymentMethods();
+          setSelectedOption(id);
+          setPendingSelection(undefined);
+        },
+        onError: (error) => {
+          console.error('setDefault error', error);
+          setPendingSelection(undefined);
+          setErrorMessage('Unable to set default payment method. Please try again later or select a card.');
+        },
+      });
+    },
+    [onChange, refetchRHPaymentMethods, setDefaultAsync, value]
+  );
+
+  const setupCardCallback = useCallback(
+    async (params: { encryptedCardData: string; last4?: string; brand?: string }): Promise<{ paymentMethodId: string }> => {
+      const result = await setupRHCard({
+        encryptedCardData: params.encryptedCardData,
+        makeDefault: cards.length === 0,
+      });
+      await refetchRHPaymentMethods();
+      return { paymentMethodId: result.paymentMethodId };
+    },
+    [cards.length, refetchRHPaymentMethods, setupRHCard]
+  );
+
+  const handleNewPaymentMethod = useCallback(
+    async (id: string): Promise<void> => {
+      // For the very first card, the setup zambda already marked it default;
+      // skip the redundant set-default round-trip and just refresh selection.
+      if (cards.length === 0) {
+        setSelectedOption(id);
         if (value !== true && onChange) {
           onChange({ target: { value: true } });
         }
-
-        await Promise.all([refetchPaymentMethods(), refetchSetupData()]);
-        setSelectedOption(id);
-        setPendingSelection(undefined);
-      },
-      onError: (error) => {
-        console.error('setDefault error', error);
-        setPendingSelection(undefined);
-        setErrorMessage('Unable to set default payment method. Please try again later or select a card.');
-      },
-    });
-  };
-
-  const handleNewPaymentMethod = async (id: string): Promise<void> => {
-    await onMakePrimary(id);
-  };
+        return;
+      }
+      await onMakePrimary(id);
+    },
+    [cards.length, onChange, onMakePrimary, value]
+  );
 
   return (
     <Box
@@ -115,59 +131,56 @@ export const CreditCardVerification: FC<CreditCardVerificationProps> = ({ fieldI
         </Typography>
       </Card>
       <CreditCardContent
-        setupData={setupData}
         pendingSelection={pendingSelection}
         selectedOption={selectedOption}
         cards={cards}
         disabled={disabled}
+        isSavingCard={isSavingCard || isSetupCardPending}
         required={required}
         errorMessage={errorMessage}
-        stripePromise={stripePromise}
         setErrorMessage={setErrorMessage}
         onMakePrimary={onMakePrimary}
         handleNewPaymentMethod={handleNewPaymentMethod}
+        setupCard={setupCardCallback}
       />
     </Box>
   );
 };
 
 interface CreditCardContentProps {
-  setupData: PaymentMethodSetupZambdaOutput | undefined;
   pendingSelection: string | undefined;
   selectedOption: string | undefined;
-  cards: CreditCardInfo[];
+  cards: RHCreditCardInfo[];
   disabled: boolean;
+  isSavingCard: boolean;
   required: boolean;
   errorMessage: string | undefined;
-  stripePromise: Promise<Stripe | null>;
   setErrorMessage: (message: string | undefined) => void;
   onMakePrimary: (id: string) => Promise<void>;
   handleNewPaymentMethod: (id: string) => Promise<void>;
+  setupCard: (params: {
+    encryptedCardData: string;
+    last4?: string;
+    brand?: string;
+  }) => Promise<{ paymentMethodId: string }>;
 }
 
 const CreditCardContent: FC<CreditCardContentProps> = ({
-  setupData,
   pendingSelection,
   cards,
   selectedOption,
   disabled,
+  isSavingCard,
   errorMessage,
   required,
-  stripePromise,
   setErrorMessage,
   onMakePrimary,
   handleNewPaymentMethod,
+  setupCard,
 }) => {
   const theme = useTheme();
   const cardFormRef = useCreditCardStore((state) => state.cardFormRef);
   const handleCardChange = useCreditCardStore((state) => state.handleCardChange);
-
-  const stripeOptions = useMemo(
-    () => ({
-      clientSecret: setupData?.clientSecret,
-    }),
-    [setupData?.clientSecret]
-  );
 
   return (
     <>
@@ -226,7 +239,7 @@ const CreditCardContent: FC<CreditCardContentProps> = ({
                       )}
                       <Typography
                         data-testid={dataTestIds.cardNumber}
-                      >{`${formattedBrand} •••• ${item.lastFour}`}</Typography>
+                      >{`${formattedBrand} •••• ${item.last4 ?? '----'}`}</Typography>
                     </Box>
                   }
                   sx={{
@@ -253,21 +266,14 @@ const CreditCardContent: FC<CreditCardContentProps> = ({
         </RadioGroup>
       </Box>
 
-      {!setupData?.clientSecret ? (
-        <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', py: 4 }}>
-          <CircularProgress />
-        </Box>
-      ) : (
-        <Elements stripe={stripePromise} options={stripeOptions} key={setupData.clientSecret}>
-          <AddCreditCardForm
-            ref={cardFormRef}
-            clientSecret={setupData.clientSecret}
-            disabled={disabled}
-            selectPaymentMethod={handleNewPaymentMethod}
-            onCardChange={handleCardChange}
-          />
-        </Elements>
-      )}
+      <RHAddCreditCardFormStub
+        ref={cardFormRef}
+        disabled={disabled}
+        isSaving={isSavingCard}
+        onCardChange={handleCardChange}
+        setupCard={setupCard}
+        selectPaymentMethod={handleNewPaymentMethod}
+      />
       <Snackbar
         anchorOrigin={{ vertical: 'top', horizontal: 'right' }}
         open={errorMessage !== undefined}
