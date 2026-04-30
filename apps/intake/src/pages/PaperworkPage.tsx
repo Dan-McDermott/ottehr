@@ -18,7 +18,11 @@ import { t } from 'i18next';
 import { FC, ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Navigate, Outlet, useLocation, useNavigate, useParams } from 'react-router-dom';
-import { useGetPaymentMethods, useSetupPaymentMethod } from 'src/telemed/features/paperwork';
+import {
+  useGetPaymentMethods,
+  useGetRHPaymentMethods,
+  useSetupPaymentMethod,
+} from 'src/telemed/features/paperwork';
 import {
   APIError,
   ComplexValidationResult,
