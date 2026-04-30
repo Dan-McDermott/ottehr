@@ -1,13 +1,15 @@
 import Oystehr from '@oystehr/sdk';
 import { captureException } from '@sentry/aws-serverless';
-import { CandidApi, CandidApiClient } from 'candidhealth';
 import {
   Appointment,
+  Claim,
+  ClaimResponse,
   Coverage,
   Encounter,
   Location,
   Organization,
   Patient,
+  PaymentNotice,
   RelatedPerson,
   Resource,
   Schedule,
@@ -24,7 +26,6 @@ import {
 } from 'utils';
 import { getAccountAndCoverageResourcesForPatient } from '../../ehr/shared/harvest';
 import { getDefaultBillingProviderResource } from '../../patient/get-eligibility/validation';
-import { getCandidEncounterIdFromEncounter } from '../candid';
 import { resolveTimezone } from '../helpers';
 import { getLogoBase64 } from './get-logo-base64';
 
@@ -65,7 +66,6 @@ interface GetStatementDetailsInput {
   statementType: StatementType;
   secrets: Secrets;
   oystehr: Oystehr;
-  candidApiClient: CandidApiClient;
 }
 
 const UNKNOWN_BILLER_VALUE = 'unknown';
@@ -199,77 +199,128 @@ function formatMoney(cents: number | undefined): string {
   return `$${((cents ?? 0) / 100).toFixed(2)}`;
 }
 
-async function getServiceLines(
-  encounter: Encounter,
-  candid: CandidApiClient,
-  oystehr: Oystehr
-): Promise<StatementLineDetails> {
+// FHIR adjudication category codes (http://terminology.hl7.org/CodeSystem/adjudication).
+// Used to extract per-line amounts from ClaimResponse.item[].adjudication[].
+const ADJUDICATION_CATEGORY_BENEFIT = 'benefit';
+const ADJUDICATION_CATEGORY_PAID_TO_PROVIDER = 'paidtoprovider';
+const ADJUDICATION_CATEGORY_DEDUCTIBLE = 'deductible';
+
+interface AdjudicatedAmounts {
+  insurancePaidCents: number;
+  deductibleCents: number;
+}
+
+function dollarsToCents(value: number | undefined): number {
+  if (value == null || Number.isNaN(value)) return 0;
+  return Math.round(value * 100);
+}
+
+function sumAdjudicationsForLine(
+  claimResponses: ClaimResponse[],
+  itemSequence: number | undefined
+): AdjudicatedAmounts {
+  let insurancePaidCents = 0;
+  let deductibleCents = 0;
+
+  for (const cr of claimResponses) {
+    const matchingItems = (cr.item ?? []).filter((it) => itemSequence != null && it.itemSequence === itemSequence);
+    for (const item of matchingItems) {
+      for (const adj of item.adjudication ?? []) {
+        const code =
+          adj.category?.coding?.find((c) => c.system?.includes('adjudication'))?.code ??
+          adj.category?.coding?.[0]?.code;
+        const amount = dollarsToCents(adj.amount?.value);
+        if (code === ADJUDICATION_CATEGORY_BENEFIT || code === ADJUDICATION_CATEGORY_PAID_TO_PROVIDER) {
+          insurancePaidCents += amount;
+        } else if (code === ADJUDICATION_CATEGORY_DEDUCTIBLE) {
+          deductibleCents += amount;
+        }
+      }
+    }
+  }
+
+  return { insurancePaidCents, deductibleCents };
+}
+
+function sumPatientPaymentsCents(paymentNotices: PaymentNotice[]): number {
+  return paymentNotices.reduce((acc, n) => acc + dollarsToCents(n.amount?.value), 0);
+}
+
+// Exported for unit testing.
+export async function getServiceLines(encounter: Encounter, oystehr: Oystehr): Promise<StatementLineDetails> {
   const encounterId = encounter.id;
   if (!encounterId) {
     throw new Error('Encounter id is missing');
   }
 
-  const candidEncounterId = getCandidEncounterIdFromEncounter(encounter);
-  if (!candidEncounterId) {
-    throw new Error(`Candid encounter id is missing for "Encounter/${encounterId}"`);
+  const patientReference = encounter.subject?.reference;
+  if (!patientReference || !patientReference.startsWith('Patient/')) {
+    throw new Error(`Encounter "${encounterId}" has no patient subject reference`);
   }
 
-  const candidEncounterResponse = await candid.encounters.v4.get(CandidApi.EncounterId(candidEncounterId));
-
-  const candidClaimId =
-    candidEncounterResponse && candidEncounterResponse.ok
-      ? candidEncounterResponse.body?.claims?.[0]?.claimId
-      : undefined;
-
-  if (!candidClaimId) {
-    throw new Error(`Candid encounter "${candidEncounterId}" has no claim`);
-  }
-
-  const candidClaimResponse = await candid.patientAr.v1.itemize(CandidApi.ClaimId(candidClaimId));
-  const itemizationResponse = candidClaimResponse && candidClaimResponse.ok ? candidClaimResponse.body : undefined;
-
-  if (!itemizationResponse) {
-    throw new Error('Failed to get itemization response');
-  }
-
-  const serviceLines = await Promise.all(
-    itemizationResponse.serviceLineItemization.map(async (serviceLine) => {
-      const chargeAfterAdjustments =
-        serviceLine.chargeAmountCents - serviceLine.insuranceAdjustments.totalAdjustmentCents;
-      const insurancePaid = serviceLine.insurancePayments.totalPaymentCents;
-      const patientPaid = serviceLine.patientPayments.totalPaymentCents;
-      const patientOwes = serviceLine.patientBalanceCents;
-
-      return {
-        cpt: serviceLine.procedureCode,
-        description: await getProcedureCodeTitle(serviceLine.procedureCode, oystehr),
-        charged: formatMoney(chargeAfterAdjustments),
-        insurancePaid: formatMoney(insurancePaid),
-        patientPaid: formatMoney(patientPaid),
-        patientOwes: formatMoney(patientOwes),
-      };
+  const claimBundle = (
+    await oystehr.fhir.search<Claim | ClaimResponse>({
+      resourceType: 'Claim',
+      params: [
+        { name: 'encounter', value: `Encounter/${encounterId}` },
+        { name: '_revinclude', value: 'ClaimResponse:request' },
+      ],
     })
-  );
+  ).unbundle();
 
-  const totalsCents = itemizationResponse.serviceLineItemization.reduce(
-    (acc, serviceLine) => {
-      const chargeAfterAdjustments =
-        serviceLine.chargeAmountCents - serviceLine.insuranceAdjustments.totalAdjustmentCents;
-      acc.charged += chargeAfterAdjustments;
-      acc.insurancePaid += serviceLine.insurancePayments.totalPaymentCents;
-      acc.patientPaid += serviceLine.patientPayments.totalPaymentCents;
-      acc.balanceDue += serviceLine.patientBalanceCents;
-      acc.deductible += serviceLine.deductibleCents ?? 0;
-      return acc;
-    },
-    {
-      charged: 0,
-      insurancePaid: 0,
-      patientPaid: 0,
-      balanceDue: 0,
-      deductible: 0,
+  const claims = claimBundle.filter((r): r is Claim => r.resourceType === 'Claim');
+  if (claims.length === 0) {
+    throw new Error(`No Claim found for "Encounter/${encounterId}"`);
+  }
+  const claimResponses = claimBundle.filter((r): r is ClaimResponse => r.resourceType === 'ClaimResponse');
+
+  // PaymentNotices for the encounter where status is "paid" represent completed patient
+  // payments per locked decision #5. FHIR does not allocate these per service line, so we
+  // sum them at the totals level only.
+  const paymentNotices = (
+    await oystehr.fhir.search<PaymentNotice>({
+      resourceType: 'PaymentNotice',
+      params: [
+        { name: 'request', value: `Encounter/${encounterId}` },
+        { name: 'payment-status', value: 'paid' },
+      ],
+    })
+  ).unbundle();
+
+  const totalsCents = {
+    charged: 0,
+    insurancePaid: 0,
+    patientPaid: sumPatientPaymentsCents(paymentNotices),
+    balanceDue: 0,
+    deductible: 0,
+  };
+
+  const serviceLines: StatementLineDetails['serviceLines'] = [];
+  for (const claim of claims) {
+    const claimResponsesForClaim = claimResponses.filter((cr) => cr.request?.reference === `Claim/${claim.id}`);
+    for (const item of claim.item ?? []) {
+      const cpt = item.productOrService?.coding?.[0]?.code ?? '';
+      const chargedCents = dollarsToCents(item.net?.value ?? item.unitPrice?.value);
+      const { insurancePaidCents, deductibleCents } = sumAdjudicationsForLine(claimResponsesForClaim, item.sequence);
+      const patientOwesCents = Math.max(0, chargedCents - insurancePaidCents);
+
+      serviceLines.push({
+        cpt,
+        description: await getProcedureCodeTitle(cpt, oystehr),
+        charged: formatMoney(chargedCents),
+        insurancePaid: formatMoney(insurancePaidCents),
+        patientPaid: formatMoney(0),
+        patientOwes: formatMoney(patientOwesCents),
+      });
+
+      totalsCents.charged += chargedCents;
+      totalsCents.insurancePaid += insurancePaidCents;
+      totalsCents.balanceDue += patientOwesCents;
+      totalsCents.deductible += deductibleCents;
     }
-  );
+  }
+
+  totalsCents.balanceDue = Math.max(0, totalsCents.balanceDue - totalsCents.patientPaid);
 
   return {
     serviceLines,
@@ -378,7 +429,7 @@ function createStatementDetails(
 }
 
 export async function getStatementDetails(input: GetStatementDetailsInput): Promise<StatementDetails> {
-  const { encounterId, secrets, oystehr, candidApiClient } = input;
+  const { encounterId, secrets, oystehr } = input;
   const resources = await getResources(encounterId, oystehr);
   const { guarantorResource, coverages, insuranceOrgs } = await getAccountAndCoverageResourcesForPatient(
     resources.patient.id ?? '',
@@ -390,7 +441,7 @@ export async function getStatementDetails(input: GetStatementDetailsInput): Prom
   }
 
   const insuranceDetails = getInsuranceDetails(coverages, insuranceOrgs);
-  const { serviceLines, totals } = await getServiceLines(resources.encounter, candidApiClient, oystehr);
+  const { serviceLines, totals } = await getServiceLines(resources.encounter, oystehr);
   const paymentUrl = getSecret(SecretsKeys.PATIENT_LOGIN_REDIRECT_URL, secrets);
 
   let billerDetails: StatementBillerDetails = {
