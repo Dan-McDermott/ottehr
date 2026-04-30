@@ -157,12 +157,16 @@ describe('performEffect (FHIR-based)', () => {
     amount: { value: 25 },
     created: '2026-01-03',
   };
+  // Per spec Locked Decision #5, "pending" = paymentStatus="paid" AND the notice's `request`
+  // references the Patient directly (i.e., not yet allocated to a billed Encounter).
   const pendingPatientNotice: PaymentNotice = {
     resourceType: 'PaymentNotice',
     id: 'pn-pending',
     status: 'active',
     payment: { reference: 'PaymentReconciliation/y' },
     paymentDate: '2026-01-04',
+    paymentStatus: { coding: [{ system: PAY_SYSTEM, code: 'paid' }] },
+    request: { reference: 'Patient/pat-1' },
     recipient: { reference: 'Patient/pat-1' },
     amount: { value: 10 },
     created: '2026-01-04',
@@ -185,9 +189,14 @@ describe('performEffect (FHIR-based)', () => {
             return { unbundle: () => [claim, claimResponse] };
           }
           if (resourceType === 'PaymentNotice') {
-            const isPerEncounter = params.some((p) => p.name === 'request');
-            if (isPerEncounter) return { unbundle: () => [paidPatientNotice] };
-            return { unbundle: () => [paidPatientNotice, pendingPatientNotice] };
+            const requestParam = params.find((p) => p.name === 'request');
+            if (requestParam?.value.startsWith('Encounter/')) {
+              return { unbundle: () => [paidPatientNotice] };
+            }
+            if (requestParam?.value.startsWith('Patient/')) {
+              return { unbundle: () => [pendingPatientNotice] };
+            }
+            return { unbundle: () => [] };
           }
           return { unbundle: () => [] };
         },

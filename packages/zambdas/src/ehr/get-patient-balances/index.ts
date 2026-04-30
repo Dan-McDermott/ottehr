@@ -162,6 +162,13 @@ export function sumPaidPaymentNoticeCents(notices: PaymentNotice[]): number {
   }, 0);
 }
 
+// Per-encounter charges and adjudications are correlated by FHIR reference (Claim.encounter and
+// ClaimResponse.request) — the natural, in-graph join. The Track B X12 helpers
+// (`findClaimByCLM01`, `findClaimResponseByPayerICN`, `getStediTransactionIds` from
+// `utils/lib/types/data/x12`) exist for the *opposite* direction: locating FHIR resources from raw
+// X12 control numbers (CLM01 / payer ICN). In this read path we already have the Encounter ID, so
+// no X12 → FHIR resolution is required and the helpers don't fit. They will be the right tool for
+// the Stedi → FHIR worker side (Track C downstream waves), not for read-time aggregation here.
 async function populateEncounterBalances(oystehr: Oystehr, encounterDataMap: EncounterDataMap): Promise<void> {
   for (const encounterId of encounterDataMap.keys()) {
     const claimBundle = (
@@ -200,20 +207,26 @@ async function populateEncounterBalances(oystehr: Oystehr, encounterDataMap: Enc
   }
 }
 
-// "Pending" patient payments are PaymentNotices for the patient that have not yet been
-// settled (paymentStatus is absent or anything other than "paid"). Completed (paid) payments
-// are already netted out per-encounter in populateEncounterBalances and are excluded here.
+// "Pending" patient payments per spec Locked Decision #5: money the patient has actually pushed
+// (paymentStatus = "paid") that has *not yet been allocated* to a billed Encounter. PaymentNotices
+// whose `request` references an Encounter are already netted out per-encounter in
+// populateEncounterBalances; we identify "unallocated" notices as those whose `request` references
+// the Patient directly (target = Patient/{id} with no Encounter). This is the operationally
+// equivalent simpler form of "paid AND payment-reference does not point to a PaymentReconciliation
+// for an already-counted Encounter Invoice" — equivalent here because the codebase's Temporal
+// workers attach paid-against-encounter notices to the Encounter via PaymentNotice.request, never
+// indirectly through the PaymentReconciliation.
 async function getPendingPatientPayments(oystehr: Oystehr, patientId: string): Promise<number> {
   const notices = (
     await oystehr.fhir.search<PaymentNotice>({
       resourceType: 'PaymentNotice',
-      params: [{ name: 'request.patient._id', value: patientId }],
+      params: [{ name: 'request', value: `Patient/${patientId}` }],
     })
   ).unbundle();
 
   let pending = 0;
   for (const n of notices) {
-    if (getPaymentNoticeStatusCode(n) !== PAYMENT_STATUS_PAID) {
+    if (getPaymentNoticeStatusCode(n) === PAYMENT_STATUS_PAID) {
       pending += dollarsToCents(n.amount?.value);
     }
   }
