@@ -12,12 +12,21 @@ import { getSecret, Secrets, SecretsKeys } from 'utils';
 //   - CipherPay (CNP Sale + Refund only): RH_CIPHERPAY_BASE_URL
 //     Auth: x-api-key header (per-MAC: RH_CIPHERPAY_API_KEY_<MAC>).
 //     Endpoints: /api/v1/pay, /api/v1/refund.
+//
+// CipherPay client-side encryption (browser, W2.1):
+//   The browser uses the Rectangle Health CipherPay JavaScript SDK to encrypt
+//   cardholder data PCI-safely before it ever reaches our server. The SDK
+//   produces a single `encrypted_card_data` string which is then forwarded to
+//   the zambda for sale or token-creation. Token creation (Card-on-File)
+//   yields a `payment_token` that can be reused for subsequent sales without
+//   re-encrypting card data.
+//   Reference: https://docs.rectanglehealth.com/api-runner/rectanglehealth/rh_api/v3/rectangle-health-pay-card-not-present/payment-encryption
 
 // ---------------------------------------------------------------------------
 // FHIR identifier system for RH transaction IDs
 // ---------------------------------------------------------------------------
 
-export const RH_PAYMENT_ID_SYSTEM = 'https://fhir.oystehr.com/PaymentIdSystem/rectangle-health';
+export const RH_PAYMENT_ID_SYSTEM = 'https://fhir.oystehr.com/PaymentIdSystem/rectangle-health/transaction';
 export const RH_PAYMENT_TOKEN_ID_SYSTEM = 'https://fhir.oystehr.com/PaymentIdSystem/rectangle-health/payment-token';
 
 export const makeBusinessIdentifierForRectangleHealthPayment = (transactionId: string): Identifier => ({
@@ -170,6 +179,15 @@ export interface AccountHolder {
 
 export interface RectangleHealthSaleInput {
   encrypted_card_data: string;
+  amount: string;
+  inv_num: string;
+  accept_partial_amount?: boolean;
+  non_surcharge?: boolean;
+  account_holder?: AccountHolder;
+}
+
+export interface RectangleHealthSaleViaTokenInput {
+  payment_token: string;
   amount: string;
   inv_num: string;
   accept_partial_amount?: boolean;
@@ -379,15 +397,38 @@ export class RectangleHealthClient {
   }
 
   /**
-   * Sale via Payment Token. The exact body shape for v3 is not enumerated in
-   * the published v3 spec note used for W0.3, so this method is intentionally
-   * left unimplemented. Escalate to coordinator with a captured response when
-   * the full body schema is confirmed.
+   * Sale via Payment Token (Card-on-File charge).
+   *
+   * Body shape extracted from the RH v3 documentation api-runner SSR JSON for
+   *   /api-runner/rectanglehealth/rh_api/v3/rectangle-health-pay-card-not-present/sale-with-payment-token
+   * on 2026-04-30. Same endpoint as `sale` (`POST /api/v1/pay`); the difference
+   * is that the body carries `payment_token` (created via Card-on-File flow on
+   * the Services surface) instead of `encrypted_card_data`. Headers and
+   * surface auth (x-api-key) match the standard CipherPay sale.
    */
-  async saleViaToken(_input: unknown): Promise<RectangleHealthSaleResponse> {
-    throw new Error(
-      'RectangleHealthClient.saleViaToken is not yet implemented — v3 request body shape pending confirmation'
-    );
+  async saleViaToken(input: RectangleHealthSaleViaTokenInput): Promise<RectangleHealthSaleResponse> {
+    if (!input.payment_token) throw new Error('payment_token is required');
+    if (!input.amount) throw new Error('amount is required');
+    if (!input.inv_num) throw new Error('inv_num is required');
+    assertCipherpayKeyConfigured(this.env);
+    const body: Record<string, unknown> = {
+      payment_token: input.payment_token,
+      amount: input.amount,
+      transaction_type: 'sale',
+      merchant_account_code: this.env.merchantAccountCode,
+      inv_num: input.inv_num,
+    };
+    if (input.accept_partial_amount !== undefined) body.accept_partial_amount = input.accept_partial_amount;
+    if (input.non_surcharge !== undefined) body.non_surcharge = input.non_surcharge;
+    if (input.account_holder) body.account_holder = input.account_holder;
+    return rhRequest<RectangleHealthSaleResponse>({
+      surface: 'cipherpay',
+      method: 'POST',
+      url: `${this.env.cipherpayBaseUrl}/api/v1/pay`,
+      endpoint: '/api/v1/pay',
+      headers: { 'x-api-key': this.env.cipherpayApiKey },
+      body,
+    });
   }
 
   async refund(input: RectangleHealthRefundInput): Promise<RectangleHealthRefundResponse> {
@@ -458,3 +499,39 @@ export class RectangleHealthClient {
 export function createRectangleHealthClient(secrets: Secrets | null, entity: RHClinicEntity): RectangleHealthClient {
   return new RectangleHealthClient(validateRectangleHealthEnvironment(secrets, entity));
 }
+
+// ---------------------------------------------------------------------------
+// Entity resolution: Encounter -> Location -> Organization -> RHClinicEntity
+// ---------------------------------------------------------------------------
+// TODO(W1.4): replace with the canonical helper once W1.4 ships an
+// Encounter-aware variant; `getEntityForLocation` from utils already carries
+// the Location -> Organization -> entity portion.
+
+export const getEntityForEncounter = async (encounterId: string, oystehr: Oystehr): Promise<RHClinicEntity> => {
+  const bundle = await oystehr.fhir.search<Encounter | Location>({
+    resourceType: 'Encounter',
+    params: [
+      { name: '_id', value: encounterId },
+      { name: '_include', value: 'Encounter:location' },
+    ],
+  });
+  const resources = bundle.unbundle();
+  const encounter = resources.find((r): r is Encounter => r.resourceType === 'Encounter' && r.id === encounterId);
+  if (!encounter) {
+    throw new Error(`Cannot resolve Rectangle Health entity for Encounter/${encounterId}: encounter not found`);
+  }
+  const locationRef = encounter.location?.[0]?.location?.reference;
+  if (!locationRef || !locationRef.startsWith('Location/')) {
+    throw new Error(
+      `Cannot resolve Rectangle Health entity for Encounter/${encounterId}: encounter has no Location reference`
+    );
+  }
+  const locationId = locationRef.slice('Location/'.length);
+  const location = resources.find((r): r is Location => r.resourceType === 'Location' && r.id === locationId);
+  if (!location) {
+    throw new Error(
+      `Cannot resolve Rectangle Health entity for Encounter/${encounterId}: included Location/${locationId} missing`
+    );
+  }
+  return getEntityForLocation(location, oystehr);
+};
