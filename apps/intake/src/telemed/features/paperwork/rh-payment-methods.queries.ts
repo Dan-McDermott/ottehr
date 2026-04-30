@@ -1,10 +1,5 @@
 import { useMutation, UseMutationResult, useQuery, UseQueryResult } from '@tanstack/react-query';
-import {
-  chooseJson,
-  RHListPaymentMethodsZambdaOutput,
-  RHPaymentMethodSetupZambdaOutput,
-  useSuccessQuery,
-} from 'utils';
+import { chooseJson, RHListPaymentMethodsZambdaOutput, RHPaymentMethodSetupZambdaOutput, useSuccessQuery } from 'utils';
 import { useUCZambdaClient } from '../../../hooks/useUCZambdaClient';
 
 export const RH_PAYMENT_METHODS_QUERY_KEY = 'rh-payment-methods-list';

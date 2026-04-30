@@ -89,7 +89,11 @@ export const CreditCardVerification: FC<CreditCardVerificationProps> = ({ fieldI
   );
 
   const setupCardCallback = useCallback(
-    async (params: { encryptedCardData: string; last4?: string; brand?: string }): Promise<{ paymentMethodId: string }> => {
+    async (params: {
+      encryptedCardData: string;
+      last4?: string;
+      brand?: string;
+    }): Promise<{ paymentMethodId: string }> => {
       const result = await setupRHCard({
         encryptedCardData: params.encryptedCardData,
         makeDefault: cards.length === 0,
@@ -237,9 +241,9 @@ const CreditCardContent: FC<CreditCardContentProps> = ({
                           <CreditCardBrandIcon brand={item.brand} />
                         </Box>
                       )}
-                      <Typography
-                        data-testid={dataTestIds.cardNumber}
-                      >{`${formattedBrand} •••• ${item.last4 ?? '----'}`}</Typography>
+                      <Typography data-testid={dataTestIds.cardNumber}>{`${formattedBrand} •••• ${
+                        item.last4 ?? '----'
+                      }`}</Typography>
                     </Box>
                   }
                   sx={{
