@@ -135,8 +135,8 @@ export const fetchLatestEligibilityStatusForCoverage = async (
     });
     const responses = bundle.unbundle();
     const matchForCoverage = coverageId
-      ? responses.find((cer) =>
-          cer.insurance?.some((ins) => ins.coverage?.reference?.endsWith(`Coverage/${coverageId}`))
+      ? responses.find(
+          (cer) => cer.insurance?.some((ins) => ins.coverage?.reference?.endsWith(`Coverage/${coverageId}`))
         )
       : undefined;
     const latest = matchForCoverage ?? responses[0];

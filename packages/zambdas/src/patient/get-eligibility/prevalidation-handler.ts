@@ -364,4 +364,3 @@ const getGender = (sex: string | undefined): 'male' | 'female' | 'unknown' | 'ot
   }
   return 'unknown';
 };
-
