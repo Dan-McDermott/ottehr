@@ -1,5 +1,6 @@
-import { Identifier } from 'fhir/r4b';
-import { getSecret, Secrets, SecretsKeys } from 'utils';
+import Oystehr from '@oystehr/sdk';
+import { Encounter, Identifier, Location } from 'fhir/r4b';
+import { getEntityForLocation, getSecret, Secrets, SecretsKeys } from 'utils';
 
 // Rectangle Health (RH) v3 API client.
 // Docs: https://docs.rectanglehealth.com/api-runner/rectanglehealth/rh_api/v3
