@@ -27,12 +27,16 @@ import {
 } from 'utils';
 import {
   createOystehrClient,
+  createRectangleHealthClient,
   getAuth0Token,
+  getEntityForEncounter,
   getStripeClient,
   getUser,
   lambdaResponse,
   makeBusinessIdentifierForCandidPayment,
+  makeBusinessIdentifierForRectangleHealthPayment,
   makeBusinessIdentifierForStripePayment,
+  RectangleHealthSaleResponse,
   wrapHandler,
   ZambdaInput,
 } from '../../../shared';
@@ -150,6 +154,34 @@ const performEffect = async (
     paymentNoticeInput.stripePaymentIntentId = paymentIntent.id;
 
     console.log('Payment Intent created:', JSON.stringify(paymentIntent, null, 2));
+  } else if (paymentMethod === 'rh-card') {
+    const entity = await getEntityForEncounter(encounterId, oystehrClient);
+    const rhClient = createRectangleHealthClient(requiredSecrets.secrets, entity);
+    const amountDecimal = (amountInCents / 100).toFixed(2);
+    const invNum = `enc-${encounterId}`;
+    let saleResponse: RectangleHealthSaleResponse;
+    if (paymentDetails.paymentToken) {
+      saleResponse = await rhClient.saleViaToken({
+        payment_token: paymentDetails.paymentToken,
+        amount: amountDecimal,
+        inv_num: invNum,
+      });
+    } else if (paymentDetails.encryptedCardData) {
+      saleResponse = await rhClient.sale({
+        encrypted_card_data: paymentDetails.encryptedCardData,
+        amount: amountDecimal,
+        inv_num: invNum,
+      });
+    } else {
+      throw INVALID_INPUT_ERROR(
+        '"paymentDetails.encryptedCardData" or "paymentDetails.paymentToken" is required for rh-card payments.'
+      );
+    }
+    if (!saleResponse.transaction_id) {
+      throw new Error('Rectangle Health sale completed without a transaction_id');
+    }
+    paymentNoticeInput.rhTransactionId = saleResponse.transaction_id;
+    console.log('Rectangle Health sale completed:', saleResponse.transaction_id);
   } else {
     console.log('handling non card payment:', paymentMethod, amountInCents, description);
     // here's where we might set a candidPayment id once candid stuff has been added
@@ -220,20 +252,32 @@ const validateRequestParameters = (input: ZambdaInput): PostPatientPaymentInput 
     throw INVALID_INPUT_ERROR('"encounterId" must be a valid UUID.');
   }
 
-  const { paymentMethod, amountInCents, paymentMethodId, description } = paymentDetails;
+  const { paymentMethod, amountInCents, paymentMethodId, description, encryptedCardData, paymentToken } =
+    paymentDetails;
   if (
     paymentMethod !== 'card' &&
     paymentMethod !== 'card-reader' &&
     paymentMethod !== 'external-card-reader' &&
     paymentMethod !== 'cash' &&
-    paymentMethod !== 'check'
+    paymentMethod !== 'check' &&
+    paymentMethod !== 'rh-card'
   ) {
     throw INVALID_INPUT_ERROR(
-      '"paymentDetails.paymentMethod" must be "card", "card-reader", "external-card-reader", "cash", or "check".'
+      '"paymentDetails.paymentMethod" must be "card", "rh-card", "card-reader", "external-card-reader", "cash", or "check".'
     );
   }
   if (paymentMethod === 'card' && !paymentMethodId) {
     throw INVALID_INPUT_ERROR('"paymentDetails.paymentMethodId" is required for card payments.');
+  }
+  if (paymentMethod === 'rh-card' && !encryptedCardData && !paymentToken) {
+    throw INVALID_INPUT_ERROR(
+      '"paymentDetails.encryptedCardData" or "paymentDetails.paymentToken" is required for rh-card payments.'
+    );
+  }
+  if (paymentMethod === 'rh-card' && encryptedCardData && paymentToken) {
+    throw INVALID_INPUT_ERROR(
+      '"paymentDetails" cannot specify both "encryptedCardData" and "paymentToken" for rh-card payments.'
+    );
   }
   const verifiedAmount = parseInt(amountInCents);
   if (isNaN(verifiedAmount) || verifiedAmount <= 0) {
@@ -316,6 +360,7 @@ interface PaymentNoticeInput extends Omit<PostPatientPaymentInput, 'patientId'> 
   submitterRef: Reference;
   stripePaymentIntentId?: string;
   candidPaymentId?: string;
+  rhTransactionId?: string;
   recipientId: string;
   dateTimeIso: string;
 }
@@ -327,6 +372,7 @@ const makePaymentNotice = (input: PaymentNoticeInput): PaymentNotice => {
     submitterRef,
     stripePaymentIntentId,
     candidPaymentId,
+    rhTransactionId,
     dateTimeIso,
     recipientId,
   } = input;
@@ -337,6 +383,8 @@ const makePaymentNotice = (input: PaymentNoticeInput): PaymentNotice => {
 
   if (paymentMethod === 'card' && stripePaymentIntentId) {
     identifier = makeBusinessIdentifierForStripePayment(stripePaymentIntentId);
+  } else if (paymentMethod === 'rh-card' && rhTransactionId) {
+    identifier = makeBusinessIdentifierForRectangleHealthPayment(rhTransactionId);
   } else if (candidPaymentId) {
     identifier = makeBusinessIdentifierForCandidPayment(candidPaymentId);
   }
@@ -366,6 +414,8 @@ const makePaymentNotice = (input: PaymentNoticeInput): PaymentNotice => {
     disposition:
       paymentMethod === 'card'
         ? 'card payment intent created and confirmed with Stripe'
+        : paymentMethod === 'rh-card'
+        ? 'card payment processed by Rectangle Health'
         : `${paymentMethod} collected from patient`,
     outcome: 'complete',
     paymentDate,

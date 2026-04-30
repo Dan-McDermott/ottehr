@@ -7,6 +7,7 @@ export interface CardPaymentDTO {
   cardLast4?: string; // this can be undefined for a brief period while it is being processed, but we have all we need to render the payment in FHIR
   stripePaymentMethodId: string | undefined; // this can be undefined for a brief period while it is being processed, but we have all we need to render the payment in FHIR
   stripePaymentId: string | undefined; // this can be undefined for a brief period while it is being processed, but we have all we need to render the payment in FHIR
+  rhTransactionId?: string; // populated when the underlying processor was Rectangle Health rather than Stripe
   description?: string;
 }
 
@@ -116,10 +117,36 @@ interface CashPayment {
   description?: string;
 }
 
-export type CashOrCardPayment = CardPayment | CashPayment;
+// Rectangle Health card-not-present charges. Either the browser produced
+// `encryptedCardData` (one-time card via CipherPay client-side encryption) or
+// the EHR is reusing a stored Card-on-File `paymentToken` (token_reference
+// returned by the Services /api/v1/payment_token endpoint).
+interface RectangleHealthCardPayment {
+  paymentMethod: 'rh-card';
+  amountInCents: number;
+  encryptedCardData?: string;
+  paymentToken?: string;
+  description?: string;
+}
+
+export type CashOrCardPayment = CardPayment | CashPayment | RectangleHealthCardPayment;
 
 export interface PostPatientPaymentInput {
   patientId: string;
   encounterId: string;
   paymentDetails: CashOrCardPayment;
+}
+
+export interface RefundPatientPaymentInput {
+  patientId: string;
+  encounterId: string;
+  paymentNoticeId: string;
+  amountInCents: number;
+  reason?: string;
+}
+
+export interface RefundPatientPaymentResponse {
+  paymentNoticeId: string;
+  refundPaymentNoticeId: string;
+  transactionId: string;
 }

@@ -1244,6 +1244,13 @@
       "src": "src/ehr/patient-payments/post/index",
       "zip": ".dist/zips/patient-payments-post.zip"
     },
+    "PATIENT-PAYMENTS-REFUND": {
+      "name": "patient-payments-refund",
+      "type": "http_auth",
+      "runtime": "nodejs22.x",
+      "src": "src/ehr/patient-payments/refund/index",
+      "zip": ".dist/zips/patient-payments-refund.zip"
+    },
     "PATIENT-PAYMENTS-GET-CONFIG": {
       "name": "patient-payments-terminal-get-config",
       "type": "http_auth",
