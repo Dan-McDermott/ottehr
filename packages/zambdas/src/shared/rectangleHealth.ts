@@ -1,6 +1,14 @@
 import Oystehr from '@oystehr/sdk';
-import { Encounter, Identifier, Location } from 'fhir/r4b';
-import { getEntityForLocation, getSecret, Secrets, SecretsKeys } from 'utils';
+import { Encounter, Identifier, Location, Organization } from 'fhir/r4b';
+import { getSecret, Secrets, SecretsKeys } from 'utils';
+
+// Merchant routing — Organization → MAC identifier system. The canonical helper
+// will live in `utils/fhir/payments.ts` once W1.4 lands; we inline the lookup
+// here so W1.2 doesn't take a hard dependency on that branch.
+const RH_MERCHANT_ACCOUNT_CODE_SYSTEM =
+  'https://fhir.oystehr.com/PaymentIdSystem/rectangle-health/merchant-account-code';
+const RH_MAC_AFTEROURS = '78072001';
+const RH_MAC_SPIRE = '78072002';
 
 // Rectangle Health (RH) v3 API client.
 // Docs: https://docs.rectanglehealth.com/api-runner/rectanglehealth/rh_api/v3
