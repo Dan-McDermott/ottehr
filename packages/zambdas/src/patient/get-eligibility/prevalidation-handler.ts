@@ -23,11 +23,7 @@ import {
   Secrets,
 } from 'utils';
 import { createInsurancePlanDto, CreateRelatedPersonObject } from '../../shared';
-import {
-  getInsurancePlansAndOrgs,
-  makeCoverageEligibilityRequest,
-  parseEligibilityCheckResponsePromiseResult,
-} from './helpers';
+import { getInsurancePlansAndOrgs, makeCoverageEligibilityRequest } from './helpers';
 import {
   complexBillingProviderValidation,
   EligibilityCheckPrevalidationStructuredInput,
@@ -35,8 +31,6 @@ import {
 } from './validation';
 
 interface Input extends EligibilityCheckPrevalidationStructuredInput {
-  apiUrl: string;
-  accessToken: string;
   secrets: Secrets | null;
 }
 
@@ -48,8 +42,6 @@ export const prevalidationHandler = async (input: Input, oystehrClient: Oystehr)
     primaryPolicyHolder,
     secondaryInsuranceData,
     secondaryPolicyHolder,
-    apiUrl,
-    accessToken,
   } = input;
 
   console.log('primary policy holder', JSON.stringify(primaryPolicyHolder), null, 2);
@@ -208,19 +200,15 @@ export const prevalidationHandler = async (input: Input, oystehrClient: Oystehr)
 
   console.log('requestIds', requestIds);
 
-  const results = await Promise.allSettled(
-    requestIds.map((reqId) => {
-      return performEligibilityCheck(reqId, apiUrl, accessToken);
-    })
-  );
-  console.log('results', JSON.stringify(results, null, 2));
-  const eligibilityVerdicts = await Promise.all(results.map((p) => parseEligibilityCheckResponsePromiseResult(p)));
-
-  console.log('eligibility verdicts', eligibilityVerdicts, results.length);
-
-  const res: GetEligibilityResponse = { primary: eligibilityVerdicts[0] };
-  if (eligibilityVerdicts.length > 1) {
-    res.secondary = eligibilityVerdicts[1];
+  // The Temporal/Stedi 270/271 pipeline picks up the CoverageEligibilityRequest resources written above
+  // and writes a CoverageEligibilityResponse asynchronously. ottehr no longer round-trips a sync check;
+  // since these coverages are freshly inlined on the request (no persisted Coverage to query against),
+  // surface a Pending verdict to the caller.
+  const res: GetEligibilityResponse = {
+    primary: { status: InsuranceEligibilityCheckStatus.eligibilityPending, dateISO },
+  };
+  if (coverages.length > 1) {
+    res.secondary = { status: InsuranceEligibilityCheckStatus.eligibilityPending, dateISO };
   }
   console.log('eligibility result', JSON.stringify(res, null, 2));
   return res;
@@ -375,20 +363,4 @@ const getGender = (sex: string | undefined): 'male' | 'female' | 'unknown' | 'ot
     }
   }
   return 'unknown';
-};
-const performEligibilityCheck = (
-  coverageEligibilityRequestId: string | undefined,
-  projectApiURL: string,
-  oystehrToken: string
-): Promise<Response> => {
-  return fetch(`${projectApiURL}/rcm/eligibility-check`, {
-    method: 'POST',
-    headers: {
-      'content-type': 'application/json',
-      Authorization: `Bearer ${oystehrToken}`,
-    },
-    body: JSON.stringify({
-      eligibilityRequestId: coverageEligibilityRequestId,
-    }),
-  });
 };
