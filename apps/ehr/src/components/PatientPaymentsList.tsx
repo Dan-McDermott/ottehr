@@ -1525,9 +1525,6 @@ export default function PatientPaymentList({
           appointmentId={appointment?.id}
           handleClose={handlePaymentDialogClose}
           isSubmitting={createNewPayment.isPending}
-          onTerminalPaymentSuccess={async () => {
-            await refetchPaymentList();
-          }}
           submitPayment={async (data: CashOrCardPayment) => {
             const postInput: PostPatientPaymentInput = {
               patientId: patient.id ?? '',
