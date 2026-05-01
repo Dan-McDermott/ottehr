@@ -1195,41 +1195,6 @@
       "src": "src/ehr/patient-payments/refund/index",
       "zip": ".dist/zips/patient-payments-refund.zip"
     },
-    "PATIENT-PAYMENTS-GET-CONFIG": {
-      "name": "patient-payments-terminal-get-config",
-      "type": "http_auth",
-      "runtime": "nodejs22.x",
-      "src": "src/ehr/patient-payments/terminal/get-config/index",
-      "zip": ".dist/zips/patient-payments-terminal-get-config.zip"
-    },
-    "PATIENT-PAYMENTS-CHECK-PAYMENT-STATUS": {
-      "name": "patient-payments-terminal-check-payment-status",
-      "type": "http_auth",
-      "runtime": "nodejs22.x",
-      "src": "src/ehr/patient-payments/terminal/check-payment-status/index",
-      "zip": ".dist/zips/patient-payments-terminal-check-payment-status.zip"
-    },
-    "PATIENT-PAYMENTS-CANCEL-READER-ACTION": {
-      "name": "patient-payments-terminal-cancel-reader-action",
-      "type": "http_auth",
-      "runtime": "nodejs22.x",
-      "src": "src/ehr/patient-payments/terminal/cancel-reader-action/index",
-      "zip": ".dist/zips/patient-payments-terminal-cancel-reader-action.zip"
-    },
-    "PATIENT-PAYMENTS-INITIATE-PAYMENT": {
-      "name": "patient-payments-terminal-initiate-payment",
-      "type": "http_auth",
-      "runtime": "nodejs22.x",
-      "src": "src/ehr/patient-payments/terminal/initiate-payment/index",
-      "zip": ".dist/zips/patient-payments-terminal-initiate-payment.zip"
-    },
-    "PATIENT-PAYMENTS-FINALIZE-PAYMENT": {
-      "name": "patient-payments-terminal-finalize-payment",
-      "type": "http_auth",
-      "runtime": "nodejs22.x",
-      "src": "src/ehr/patient-payments/terminal/finalize-payment/index",
-      "zip": ".dist/zips/patient-payments-terminal-finalize-payment.zip"
-    },
     "PATIENT-PAYMENTS-TERMINAL-RH-GET-CONFIG": {
       "name": "patient-payments-terminal-rh-get-config",
       "type": "http_auth",
