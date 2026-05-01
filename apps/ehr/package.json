@@ -57,8 +57,6 @@
     "@mui/icons-material": "^5.14.9",
     "@mui/x-data-grid-pro": "^6.3.0",
     "@mui/x-date-pickers-pro": "^6.3.0",
-    "@stripe/react-stripe-js": "^3.0.0",
-    "@stripe/stripe-js": "^3.5.0",
     "@twilio/conversations": "^2.4.1",
     "@types/wavesurfer.js": "^6.0.12",
     "amazon-chime-sdk-component-library-react": "^3.10.0",

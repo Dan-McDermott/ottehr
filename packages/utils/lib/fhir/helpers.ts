@@ -71,7 +71,6 @@ import {
   VisitType,
 } from '../types';
 import {
-
   APPOINTMENT_LOCKED_META_TAG,
   APPOINTMENT_LOCKED_META_TAG_SYSTEM,
   COVERAGE_MEMBER_IDENTIFIER_BASE,

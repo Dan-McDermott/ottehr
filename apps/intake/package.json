@@ -63,8 +63,6 @@
   },
   "dependencies": {
     "@mui/icons-material": "^5.11.16",
-    "@stripe/react-stripe-js": "^3.0.0",
-    "@stripe/stripe-js": "^3.5.0",
     "react-markdown": "^9.0.0",
     "ui-components": "*",
     "utils": "*"

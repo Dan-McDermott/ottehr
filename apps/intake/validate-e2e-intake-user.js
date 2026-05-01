@@ -13,7 +13,7 @@ export const validateE2EIntakeUser = (fileLocation) => {
       throw new Error('Could not find user.json file');
     }
 
-    // // oystehr, localhost, and stripe cookies
+    // // oystehr and localhost cookies
     // const cookies = userFile.cookies?.map((cookie) => cookie.expires);
     // expiries.push(...cookies);
 
