@@ -1,7 +1,6 @@
 export * from './accessPolicies';
 export * from './appointment';
 export * from './auth';
-export * from './candid';
 export * from './chart-data';
 export * from './communication';
 export * from './constants';

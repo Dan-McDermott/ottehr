@@ -5,6 +5,7 @@ import {
   Appointment,
   Attachment,
   Encounter,
+  Extension,
   FhirResource,
   Location,
   Meta,
@@ -28,6 +29,7 @@ import {
   TIMEZONES,
 } from 'utils';
 import { ZambdaInput } from './types';
+import { CODE_SYSTEM_CPT_MODIFIER, EXTENSION_URL_CPT_MODIFIER } from 'utils/lib/helpers/rcm';
 
 export function createOystehrClient(token: string, secrets: Secrets | null): Oystehr {
   const FHIR_API = getSecret(SecretsKeys.FHIR_API, secrets).replace(/\/r4/g, '');
@@ -253,3 +255,16 @@ export function resolveTimezone(schedule?: Schedule, location?: Location, fallba
   }
   return fallback;
 }
+
+export const makeCptModifierExtension = (input: { code: string; display: string }[]): Extension => {
+  return {
+    url: EXTENSION_URL_CPT_MODIFIER,
+    valueCodeableConcept: {
+      coding: input.map((cptCodeInfo) => ({
+        system: CODE_SYSTEM_CPT_MODIFIER,
+        code: cptCodeInfo.code,
+        display: cptCodeInfo.display,
+      })),
+    },
+  };
+};

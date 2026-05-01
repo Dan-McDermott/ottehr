@@ -33,7 +33,6 @@ import {
   getStripeClient,
   getUser,
   lambdaResponse,
-  makeBusinessIdentifierForCandidPayment,
   makeBusinessIdentifierForRectangleHealthPayment,
   makeBusinessIdentifierForStripePayment,
   RectangleHealthSaleResponse,
@@ -359,7 +358,6 @@ const complexValidation = async (input: ComplexValidationInput, oystehr: Oystehr
 interface PaymentNoticeInput extends Omit<PostPatientPaymentInput, 'patientId'> {
   submitterRef: Reference;
   stripePaymentIntentId?: string;
-  candidPaymentId?: string;
   rhTransactionId?: string;
   recipientId: string;
   dateTimeIso: string;
@@ -371,7 +369,6 @@ const makePaymentNotice = (input: PaymentNoticeInput): PaymentNotice => {
     paymentDetails,
     submitterRef,
     stripePaymentIntentId,
-    candidPaymentId,
     rhTransactionId,
     dateTimeIso,
     recipientId,
@@ -385,8 +382,6 @@ const makePaymentNotice = (input: PaymentNoticeInput): PaymentNotice => {
     identifier = makeBusinessIdentifierForStripePayment(stripePaymentIntentId);
   } else if (paymentMethod === 'rh-card' && rhTransactionId) {
     identifier = makeBusinessIdentifierForRectangleHealthPayment(rhTransactionId);
-  } else if (candidPaymentId) {
-    identifier = makeBusinessIdentifierForCandidPayment(candidPaymentId);
   }
 
   // the created timestamp is in UTC and the exact date in any timezone can always be derived from there
