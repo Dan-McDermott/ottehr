@@ -19,7 +19,6 @@ const makeOystehrAPI = (zambdaClient: Oystehr): ReturnType<typeof getOystehrAPI>
   getOystehrAPI(
     {
       cancelAppointmentZambdaID: 'telemed-cancel-appointment',
-      deletePaymentMethodZambdaID: 'payment-methods-delete',
       getAppointmentsZambdaID: 'telemed-get-appointments',
       getPastVisitsZambdaID: 'get-past-visits',
       getEligibilityZambdaID: 'get-eligibility',
@@ -27,14 +26,11 @@ const makeOystehrAPI = (zambdaClient: Oystehr): ReturnType<typeof getOystehrAPI>
       getAnswerOptionsZambdaID: 'get-answer-options',
       getPaperworkZambdaID: 'get-paperwork',
       getPatientsZambdaID: 'telemed-get-patients',
-      getPaymentMethodsZambdaID: 'payment-methods-list',
       getPresignedFileURLZambdaID: 'get-presigned-file-url',
       getTelemedLocationsZambdaID: 'get-telemed-locations',
       getWaitStatusZambdaID: 'get-wait-status',
       isAppLocal: VITE_APP_IS_LOCAL as 'true' | 'false' | undefined,
       joinCallZambdaID: 'join-call',
-      setDefaultPaymentMethodZambdaID: 'payment-methods-set-default',
-      setupPaymentMethodZambdaID: 'payment-methods-setup',
       updateAppointmentZambdaID: 'telemed-update-appointment',
       patchPaperworkZambdaID: 'patch-paperwork',
       submitPaperworkZambdaID: 'submit-paperwork',
