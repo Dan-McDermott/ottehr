@@ -99,11 +99,7 @@ const paymentSchema = yup.object().shape({
     .required('Payment method is required'),
   creditCard: yup.string().when('paymentMethod', {
     is: (val: string) => val === 'card',
-    then: (schema) =>
-      schema
-        .required('Credit card selection required')
-        .matches(RegExp('pm_[a-zA-Z0-9]{24,24}'), 'Credit card selection required')
-        .required(),
+    then: (schema) => schema.required('Credit card selection required'),
     otherwise: (schema) => schema.notRequired().nullable(),
   }),
 });
