@@ -4,10 +4,8 @@ export interface CardPaymentDTO {
   dateISO: string;
   fhirPaymentNotificationId: string;
   cardBrand?: string;
-  cardLast4?: string; // this can be undefined for a brief period while it is being processed, but we have all we need to render the payment in FHIR
-  stripePaymentMethodId: string | undefined; // this can be undefined for a brief period while it is being processed, but we have all we need to render the payment in FHIR
-  stripePaymentId: string | undefined; // this can be undefined for a brief period while it is being processed, but we have all we need to render the payment in FHIR
-  rhTransactionId?: string; // populated when the underlying processor was Rectangle Health rather than Stripe
+  cardLast4?: string;
+  rhTransactionId?: string;
   description?: string;
 }
 

@@ -10,12 +10,7 @@ import {
   SecretsKeys,
   TaskIndicator,
 } from 'utils';
-import {
-  flagPaperworkEdit,
-  getAccountAndCoverageResourcesForPatient,
-  updateStripeCustomer,
-} from '../../../ehr/shared/harvest';
-import { getStripeClient } from '../../../patient/payment-methods/helpers';
+import { flagPaperworkEdit } from '../../../ehr/shared/harvest';
 import {
   createOystehrClient,
   getAuth0Token,
@@ -115,28 +110,6 @@ export const performEffect = async (input: QRSubscriptionInput, oystehr: Oystehr
 
   // Wait for page-level harvest Tasks to finish before finalization
   await waitForPageHarvestTasks(qr.id!, oystehr);
-
-  // ── Stripe customer sync ──────────────────────────────────────────────
-  try {
-    const { account: updatedAccount, guarantorResource: updatedGuarantorResource } =
-      await getAccountAndCoverageResourcesForPatient(patientResource.id, oystehr);
-    if (updatedAccount && updatedGuarantorResource) {
-      console.time('updating stripe customer');
-      const stripeClient = getStripeClient(secrets);
-      await updateStripeCustomer({
-        account: updatedAccount,
-        guarantorResource: updatedGuarantorResource,
-        stripeClient,
-      });
-      console.timeEnd('updating stripe customer');
-    } else {
-      console.log('Stripe customer id, account or guarantor resource missing, skipping stripe customer update');
-    }
-  } catch (error: unknown) {
-    tasksFailed.push('update stripe customer');
-    console.log(`Failed to update stripe customer: ${JSON.stringify(error)}`);
-    captureException(error);
-  }
 
   // ── Paperwork edit flagging ───────────────────────────────────────────
   if (qr.status === 'amended') {

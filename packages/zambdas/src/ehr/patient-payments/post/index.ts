@@ -2,13 +2,8 @@ import Oystehr from '@oystehr/sdk';
 import { APIGatewayProxyResult } from 'aws-lambda';
 import { Identifier, Money, PaymentNotice, PaymentReconciliation, Reference } from 'fhir/r4b';
 import { DateTime } from 'luxon';
-import Stripe from 'stripe';
 import {
-  FHIR_RESOURCE_NOT_FOUND,
-  GENERIC_STRIPE_PAYMENT_ERROR,
   getSecret,
-  getStripeAccountForAppointmentOrEncounter,
-  getStripeCustomerIdFromAccount,
   getTaskResource,
   INVALID_INPUT_ERROR,
   isValidUUID,
@@ -16,12 +11,10 @@ import {
   MISSING_REQUEST_BODY,
   MISSING_REQUIRED_PARAMETERS,
   NOT_AUTHORIZED,
-  parseStripeError,
   PAYMENT_METHOD_EXTENSION_URL,
   PostPatientPaymentInput,
   Secrets,
   SecretsKeys,
-  STRIPE_CUSTOMER_ID_NOT_FOUND_ERROR,
   TaskIndicator,
   TIMEZONES,
 } from 'utils';
@@ -30,16 +23,13 @@ import {
   createRectangleHealthClient,
   getAuth0Token,
   getEntityForEncounter,
-  getStripeClient,
   getUser,
   lambdaResponse,
   makeBusinessIdentifierForRectangleHealthPayment,
-  makeBusinessIdentifierForStripePayment,
   RectangleHealthSaleResponse,
   wrapHandler,
   ZambdaInput,
 } from '../../../shared';
-import { getAccountAndCoverageResourcesForPatient } from '../../shared/harvest';
 
 const ZAMBDA_NAME = 'post-patient-payment';
 
@@ -70,10 +60,7 @@ export const index = wrapHandler(ZAMBDA_NAME, async (input: ZambdaInput): Promis
     return lambdaResponse(400, { message: error.message });
   }
 
-  const requiredSecrets = validateEnvironmentParameters(
-    input,
-    validatedParameters.paymentDetails.paymentMethod === 'card'
-  );
+  const requiredSecrets = validateEnvironmentParameters(input);
   const { patientId, encounterId } = validatedParameters;
   console.groupEnd();
   console.debug('validateRequestParameters success');
@@ -87,29 +74,34 @@ export const index = wrapHandler(ZAMBDA_NAME, async (input: ZambdaInput): Promis
 
   const oystehrClient = createOystehrClient(oystehrM2MClientToken, secrets);
 
-  const effectInput: ComplexValidationOutput = await complexValidation(
-    {
-      ...validatedParameters,
-      ...requiredSecrets,
-      userProfile,
-    },
-    oystehrClient
-  );
+  const effectInput: EffectInput = {
+    ...validatedParameters,
+    ...requiredSecrets,
+    userProfile,
+  };
 
   const { notice } = await performEffect(effectInput, oystehrClient, requiredSecrets);
 
   return lambdaResponse(200, { notice, patientId, encounterId });
 });
 
+interface RequiredSecrets {
+  organizationId: string;
+  secrets: Secrets;
+}
+
+interface EffectInput extends PostPatientPaymentInput, RequiredSecrets {
+  userProfile: string;
+}
+
 const performEffect = async (
-  input: ComplexValidationOutput,
+  input: EffectInput,
   oystehrClient: Oystehr,
   requiredSecrets: RequiredSecrets
-): Promise<{ notice: PaymentNotice; paymentIntent?: Stripe.PaymentIntent }> => {
-  const { encounterId, patientId, paymentDetails, organizationId, userProfile, stripeAccount } = input;
+): Promise<{ notice: PaymentNotice }> => {
+  const { encounterId, paymentDetails, organizationId, userProfile } = input;
   const { paymentMethod, amountInCents, description } = paymentDetails;
   const dateTimeIso = DateTime.now().toISO() || '';
-  let paymentIntent: Stripe.Response<Stripe.PaymentIntent> | undefined;
   console.log('dateTimeIso', dateTimeIso);
   const paymentNoticeInput: PaymentNoticeInput = {
     encounterId,
@@ -119,41 +111,7 @@ const performEffect = async (
     recipientId: organizationId,
   };
 
-  if (input.cardInput && paymentMethod === 'card') {
-    const stripeClient = getStripeClient(requiredSecrets.secrets);
-    const customerId = input.cardInput.stripeCustomerId;
-    const paymentMethodId = paymentDetails.paymentMethodId;
-    const paymentIntentInput: Stripe.PaymentIntentCreateParams = {
-      amount: amountInCents,
-      currency: 'usd',
-      customer: customerId,
-      payment_method: paymentMethodId,
-      description: description || `Payment for encounter ${encounterId}`,
-      confirm: true,
-      metadata: {
-        oystehr_encounter_id: encounterId,
-        // added later. if it's undefined, add conditional check to get patient id from fhir
-        oystehr_patient_id: patientId,
-      },
-      automatic_payment_methods: {
-        enabled: true,
-        allow_redirects: 'never',
-      },
-    };
-    try {
-      paymentIntent = await stripeClient.paymentIntents.create(paymentIntentInput, {
-        stripeAccount, // Connected account ID if any
-      });
-    } catch (e) {
-      throw parseStripeError(e);
-    }
-    if (paymentIntent.status !== 'succeeded') {
-      throw GENERIC_STRIPE_PAYMENT_ERROR;
-    }
-    paymentNoticeInput.stripePaymentIntentId = paymentIntent.id;
-
-    console.log('Payment Intent created:', JSON.stringify(paymentIntent, null, 2));
-  } else if (paymentMethod === 'rh-card') {
+  if (paymentMethod === 'rh-card') {
     const entity = await getEntityForEncounter(encounterId, oystehrClient);
     const rhClient = createRectangleHealthClient(requiredSecrets.secrets, entity);
     const amountDecimal = (amountInCents / 100).toFixed(2);
@@ -208,7 +166,7 @@ const performEffect = async (
   const taskCreationResult = await oystehrClient.fhir.create(paymentTaskResource);
   console.log('Task creation result:', taskCreationResult);
 
-  return { notice: paymentNotice, paymentIntent };
+  return { notice: paymentNotice };
 };
 
 const validateRequestParameters = (input: ZambdaInput): PostPatientPaymentInput => {
@@ -251,10 +209,8 @@ const validateRequestParameters = (input: ZambdaInput): PostPatientPaymentInput 
     throw INVALID_INPUT_ERROR('"encounterId" must be a valid UUID.');
   }
 
-  const { paymentMethod, amountInCents, paymentMethodId, description, encryptedCardData, paymentToken } =
-    paymentDetails;
+  const { paymentMethod, amountInCents, description, encryptedCardData, paymentToken } = paymentDetails;
   if (
-    paymentMethod !== 'card' &&
     paymentMethod !== 'card-reader' &&
     paymentMethod !== 'external-card-reader' &&
     paymentMethod !== 'cash' &&
@@ -262,11 +218,8 @@ const validateRequestParameters = (input: ZambdaInput): PostPatientPaymentInput 
     paymentMethod !== 'rh-card'
   ) {
     throw INVALID_INPUT_ERROR(
-      '"paymentDetails.paymentMethod" must be "card", "rh-card", "card-reader", "external-card-reader", "cash", or "check".'
+      '"paymentDetails.paymentMethod" must be "rh-card", "card-reader", "external-card-reader", "cash", or "check".'
     );
-  }
-  if (paymentMethod === 'card' && !paymentMethodId) {
-    throw INVALID_INPUT_ERROR('"paymentDetails.paymentMethodId" is required for card payments.');
   }
   if (paymentMethod === 'rh-card' && !encryptedCardData && !paymentToken) {
     throw INVALID_INPUT_ERROR(
@@ -296,13 +249,7 @@ const validateRequestParameters = (input: ZambdaInput): PostPatientPaymentInput 
   };
 };
 
-interface RequiredSecrets {
-  organizationId: string;
-  stripeKey: string | null;
-  secrets: Secrets;
-}
-
-const validateEnvironmentParameters = (input: ZambdaInput, isCardPayment: boolean): RequiredSecrets => {
+const validateEnvironmentParameters = (input: ZambdaInput): RequiredSecrets => {
   const secrets = input.secrets;
   if (!secrets) {
     throw new Error('Secrets are required for this operation.');
@@ -315,72 +262,24 @@ const validateEnvironmentParameters = (input: ZambdaInput, isCardPayment: boolea
     );
   }
 
-  let stripeKey: string | null = null;
-
-  if (isCardPayment) {
-    try {
-      stripeKey = getSecret(SecretsKeys.STRIPE_SECRET_KEY, secrets);
-    } catch {
-      throw MISCONFIGURED_ENVIRONMENT_ERROR(
-        '"STRIPE_SECRET_KEY" environment variable was not set. Please ensure it is configured in project secrets.'
-      );
-    }
-  }
-
-  return { organizationId, stripeKey, secrets };
-};
-
-type ComplexValidationInput = PostPatientPaymentInput & RequiredSecrets & { userProfile: string };
-interface ComplexValidationOutput extends ComplexValidationInput {
-  cardInput?: {
-    stripeCustomerId: string;
-  };
-  stripeAccount?: string;
-}
-const complexValidation = async (input: ComplexValidationInput, oystehr: Oystehr): Promise<ComplexValidationOutput> => {
-  if (input.paymentDetails.paymentMethod === 'card') {
-    const patientAccount = await getAccountAndCoverageResourcesForPatient(input.patientId, oystehr);
-    if (!patientAccount.account) {
-      throw FHIR_RESOURCE_NOT_FOUND('Account');
-    }
-
-    const stripeAccount = await getStripeAccountForAppointmentOrEncounter({ encounterId: input.encounterId }, oystehr);
-
-    const stripeCustomerId = getStripeCustomerIdFromAccount(patientAccount.account, stripeAccount);
-    if (!stripeCustomerId) {
-      throw STRIPE_CUSTOMER_ID_NOT_FOUND_ERROR;
-    }
-    return { cardInput: { stripeCustomerId }, stripeAccount, ...input };
-  }
-  return { ...input };
+  return { organizationId, secrets };
 };
 
 interface PaymentNoticeInput extends Omit<PostPatientPaymentInput, 'patientId'> {
   submitterRef: Reference;
-  stripePaymentIntentId?: string;
   rhTransactionId?: string;
   recipientId: string;
   dateTimeIso: string;
 }
 
 const makePaymentNotice = (input: PaymentNoticeInput): PaymentNotice => {
-  const {
-    encounterId,
-    paymentDetails,
-    submitterRef,
-    stripePaymentIntentId,
-    rhTransactionId,
-    dateTimeIso,
-    recipientId,
-  } = input;
+  const { encounterId, paymentDetails, submitterRef, rhTransactionId, dateTimeIso, recipientId } = input;
 
   const { paymentMethod, amountInCents } = paymentDetails;
 
   let identifier: Identifier | undefined;
 
-  if (paymentMethod === 'card' && stripePaymentIntentId) {
-    identifier = makeBusinessIdentifierForStripePayment(stripePaymentIntentId);
-  } else if (paymentMethod === 'rh-card' && rhTransactionId) {
+  if (paymentMethod === 'rh-card' && rhTransactionId) {
     identifier = makeBusinessIdentifierForRectangleHealthPayment(rhTransactionId);
   }
 
@@ -407,9 +306,7 @@ const makePaymentNotice = (input: PaymentNoticeInput): PaymentNotice => {
     status: 'active',
     created,
     disposition:
-      paymentMethod === 'card'
-        ? 'card payment intent created and confirmed with Stripe'
-        : paymentMethod === 'rh-card'
+      paymentMethod === 'rh-card'
         ? 'card payment processed by Rectangle Health'
         : `${paymentMethod} collected from patient`,
     outcome: 'complete',

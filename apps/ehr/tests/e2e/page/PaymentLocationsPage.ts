@@ -61,10 +61,6 @@ export class PaymentLocationDetailPage {
     await expect(this.page.getByText('Contact & Address')).toBeVisible(DEFAULT_TIMEOUT);
   }
 
-  async verifyStripeConnectSection(): Promise<void> {
-    await expect(this.page.getByText('Stripe Connect')).toBeVisible(DEFAULT_TIMEOUT);
-  }
-
   async verifyBreadcrumbs(): Promise<void> {
     const breadcrumb = this.page.getByLabel('breadcrumb');
     await expect(breadcrumb.getByRole('link', { name: 'Payment Locations' })).toBeVisible(DEFAULT_TIMEOUT);
@@ -80,10 +76,6 @@ export class PaymentLocationDetailPage {
 
   async verifyLocationId(id: string): Promise<void> {
     await expect(this.page.getByText(id)).toBeVisible(DEFAULT_TIMEOUT);
-  }
-
-  async verifyStripeAccountId(accountId: string): Promise<void> {
-    await expect(this.page.getByText(accountId)).toBeVisible(DEFAULT_TIMEOUT);
   }
 }
 

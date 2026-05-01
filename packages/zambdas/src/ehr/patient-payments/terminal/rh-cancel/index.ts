@@ -10,9 +10,8 @@ export interface RHTerminalCancelInput {
 
 // Rectangle Health v3 (Card-Present) does not expose a public endpoint to cancel
 // an in-flight terminal transaction; cancellation must be performed at the
-// physical device. This zambda exists for API parity with the legacy Stripe
-// `cancel-reader-action` route and always returns a clear "not supported" error
-// so the EHR can surface a meaningful message to staff.
+// physical device. This zambda always returns a clear "not supported" error so
+// the EHR can surface a meaningful message to staff.
 export const index = wrapHandler(ZAMBDA_NAME, async (input: ZambdaInput): Promise<APIGatewayProxyResult> => {
   validateRequestParameters(input);
   return lambdaResponse(501, {

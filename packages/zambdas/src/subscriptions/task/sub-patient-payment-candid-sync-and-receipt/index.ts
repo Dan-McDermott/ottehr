@@ -2,14 +2,10 @@ import Oystehr from '@oystehr/sdk';
 import { captureException } from '@sentry/aws-serverless';
 import { APIGatewayProxyResult } from 'aws-lambda';
 import { Encounter, PaymentNotice } from 'fhir/r4b';
-import Stripe from 'stripe';
-import { getStripeAccountForAppointmentOrEncounter } from 'utils';
 import {
   createOystehrClient,
   createPatientPaymentReceiptPdf,
   getAuth0Token,
-  getStripeClient,
-  STRIPE_PAYMENT_ID_SYSTEM,
   wrapHandler,
   ZambdaInput,
 } from '../../../shared';
@@ -107,26 +103,6 @@ export const index = wrapHandler(ZAMBDA_NAME, async (input: ZambdaInput): Promis
         throw new Error(`No patient reference found on Encounter ${encounterId}`);
       }
 
-      // Get Stripe payment intent if this was a card payment
-      let paymentIntent: Stripe.PaymentIntent | undefined;
-      const stripePaymentIntentId = paymentNotice.identifier?.find(
-        (identifier: { system?: string }) => identifier.system === STRIPE_PAYMENT_ID_SYSTEM
-      )?.value;
-      const stripeClient = getStripeClient(secrets);
-      const stripeAccountId = await getStripeAccountForAppointmentOrEncounter({ encounterId }, oystehr);
-
-      if (stripePaymentIntentId) {
-        try {
-          paymentIntent = await stripeClient.paymentIntents.retrieve(stripePaymentIntentId, {
-            stripeAccount: stripeAccountId,
-          });
-        } catch (error) {
-          console.error('Error fetching Stripe payment intent:', error);
-          captureException(error);
-          // Continue without payment intent - the PDF creation can handle missing Stripe data
-        }
-      }
-
       let receiptPdfFailed = false;
       const errors: string[] = [];
 
@@ -135,13 +111,10 @@ export const index = wrapHandler(ZAMBDA_NAME, async (input: ZambdaInput): Promis
         console.time('receipt pdf creation');
         const receiptPdfInfo = await createPatientPaymentReceiptPdf({
           oystehr,
-          stripeClient,
           encounterId,
           patientId,
           secrets,
           oystehrToken,
-          stripeAccountId,
-          lastOperationPaymentIntent: paymentIntent,
         });
         console.timeEnd('receipt pdf creation');
         console.log('Receipt PDF created:', receiptPdfInfo);

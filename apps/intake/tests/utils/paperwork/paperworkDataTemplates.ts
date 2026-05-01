@@ -552,7 +552,7 @@ const createPhotoIDData = (options?: { includeFront?: boolean; includeBack?: boo
 const createCreditCardData = (overrides?: { number?: string; expiry?: string; cvc?: string }): FieldTestData => ({
   valid: {
     'valid-card-on-file': {
-      // RH sandbox-friendly Visa test number; not a real Stripe-only PAN.
+      // RH sandbox-friendly Visa test number.
       number: overrides?.number || '4111111111111111',
       expiry: overrides?.expiry || '12/30',
       cvc: overrides?.cvc || '123',

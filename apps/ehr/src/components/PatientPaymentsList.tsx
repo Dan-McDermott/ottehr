@@ -27,7 +27,7 @@ import StarterKit from '@tiptap/starter-kit';
 import { Appointment, ChargeItemDefinition, DocumentReference, Encounter, Organization, Patient } from 'fhir/r4b';
 import { DateTime } from 'luxon';
 import { enqueueSnackbar } from 'notistack';
-import { FC, Fragment, ReactElement, useCallback, useEffect, useMemo, useState } from 'react';
+import { Fragment, ReactElement, useCallback, useEffect, useMemo, useState } from 'react';
 import { getEligibilityCheckDetailsForCoverage } from 'src/features/visits/shared/components/patient/InsuranceSection';
 import { useOystehrAPIClient } from 'src/features/visits/shared/hooks/useOystehrAPIClient';
 import { useChartData } from 'src/features/visits/shared/stores/appointment/appointment.store';
@@ -39,7 +39,6 @@ import { useFindApplicableFeeScheduleQuery } from 'src/rcm/state/fee-schedules/f
 import { CreditCardBrandIcon } from 'ui-components';
 import {
   APIError,
-  APIErrorCode,
   CASE_RATE_CODE,
   CashOrCardPayment,
   CoverageCheckWithDetails,
@@ -83,7 +82,6 @@ export interface PaymentListProps {
   paymentData: ListPatientPaymentResponse | undefined;
   refetchPaymentList: () => Promise<void>;
   isRefetching: boolean;
-  paymentListError: Error | null;
 }
 
 const idForPaymentDTO = (payment: PatientPaymentDTO): string => {
@@ -218,7 +216,6 @@ export default function PatientPaymentList({
   paymentData,
   refetchPaymentList,
   isRefetching,
-  paymentListError,
 }: PaymentListProps): ReactElement {
   const { oystehr, oystehrZambda } = useApiClients();
   const apiClient = useOystehrAPIClient();
@@ -469,11 +466,6 @@ export default function PatientPaymentList({
       void refetchCardOnFile();
     }
   }, [oystehrZambda, patient?.id, appointment?.id, refetchCardOnFile]);
-
-  const stripeCustomerDeletedError =
-    paymentListError && isApiError(paymentListError)
-      ? (paymentListError as APIError).code === APIErrorCode.STRIPE_CUSTOMER_ID_DOES_NOT_EXIST
-      : false;
 
   const receiptDocRefId = receiptDocRef?.id;
 
@@ -1343,179 +1335,174 @@ export default function PatientPaymentList({
           </Box>
         )}
       </Container>
-      {stripeCustomerDeletedError && <StripeErrorAlert />}
-      {!stripeCustomerDeletedError && (
-        <>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mt: 2 }}>
-            <Typography variant="h5" color="primary.dark">
-              Patient Payments
-            </Typography>
-            <GenericToolTip
-              disableHoverListener={!cardOnFileKnown}
-              customWidth={220}
-              title={
-                cardOnFileKnown ? (
-                  <Box
-                    sx={{
-                      px: 1,
-                      py: 0.75,
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 1,
-                      backgroundColor: 'transparent',
-                      borderRadius: 1,
-                    }}
-                  >
-                    <Box
-                      component="span"
-                      sx={{
-                        px: 0.75,
-                        py: 0.25,
-                        borderRadius: 1,
-                        fontSize: 11,
-                        fontWeight: 700,
-                        letterSpacing: '0.3px',
-                        color: hasCreditCardOnFileFromList === true ? '#2E7D32' : '#8A1538',
-                        backgroundColor: hasCreditCardOnFileFromList === true ? '#C8E6C9' : '#FFCDD2',
-                      }}
-                    >
-                      {cardOnFileChipLabel}
-                    </Box>
-                    <Typography
-                      variant="caption"
-                      sx={{
-                        color: '#000000',
-                        fontWeight: 500,
-                      }}
-                    >
-                      {cardOnFileTooltipText}
-                    </Typography>
-                  </Box>
-                ) : (
-                  ''
-                )
-              }
-            >
-              <Box sx={{ ml: 'auto', display: 'inline-flex', alignItems: 'center' }} aria-label={cardOnFileStatusLabel}>
-                <svg width="38" height="38" viewBox="0 0 56 56" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <rect
-                    x="10"
-                    y="12"
-                    width="36"
-                    height="30"
-                    rx="5"
-                    fill={cardOnFileStatusFill}
-                    stroke={cardOnFileStatusStroke}
-                    strokeWidth="2"
-                  />
-                  <rect x="15" y="18" width="26" height="5" rx="1" fill={cardOnFileStatusStroke} opacity="0.7" />
-                  <rect x="15" y="27" width="12" height="4" rx="1" fill={cardOnFileStatusStroke} opacity="0.45" />
-                  {cardOnFileKnown && hasCreditCardOnFileFromList === true ? (
-                    <path
-                      d="M31 31L34.5 34.5L41 28"
-                      stroke={cardOnFileStatusStroke}
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                  ) : null}
-                  {cardOnFileKnown && hasCreditCardOnFileFromList === false ? (
-                    <>
-                      <path d="M32 28L40 36" stroke={cardOnFileStatusStroke} strokeWidth="2" strokeLinecap="round" />
-                      <path d="M40 28L32 36" stroke={cardOnFileStatusStroke} strokeWidth="2" strokeLinecap="round" />
-                    </>
-                  ) : null}
-                </svg>
-              </Box>
-            </GenericToolTip>
-          </Box>
-          <Table size="small" style={{ tableLayout: 'fixed' }}>
-            <TableBody>
-              {payments.length === 0 && !loading && (
-                <TableRow>
-                  <TableCell sx={{ paddingTop: 1, paddingBottom: 1 }}>
-                    <Typography variant="body1" color="textSecondary">
-                      No payments recorded.
-                    </Typography>
-                  </TableCell>
-                </TableRow>
-              )}
-              {payments.map((payment) => {
-                const paymentDateString = DateTime.fromISO(payment.dateISO).toLocaleString(DateTime.DATE_SHORT);
-                const formattedPaymentAmount = formatUsd(payment.amountInCents / 100) ?? '$0.00';
-                return (
-                  <Fragment key={idForPaymentDTO(payment)}>
-                    <TableRow sx={{ '&:last-child td': { borderBottom: 0 } }}>
-                      <>
-                        <TableCell
-                          sx={{
-                            width: '50%',
-                            color: theme.palette.primary.dark,
-                            paddingLeft: 0,
-                          }}
-                        >
-                          <Box sx={{ display: 'flex', justifyContent: 'flex-start', alignItems: 'center' }}>
-                            {getLabelForPayment(payment)}
-                          </Box>
-                        </TableCell>
-
-                        <TableCell
-                          colSpan={2}
-                          sx={{
-                            textAlign: 'center',
-                            wordWrap: 'break-word',
-                            paddingRight: 0,
-                            paddingTop: 0,
-                            fontSize: '12px',
-                          }}
-                        >
-                          {paymentDateString}
-                        </TableCell>
-
-                        <TableCell
-                          sx={{
-                            textAlign: 'right',
-                            wordWrap: 'break-word',
-                            paddingRight: 0,
-                          }}
-                        >
-                          <Box sx={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center' }}>
-                            {loading ? (
-                              <Skeleton aria-busy="true" width={200} />
-                            ) : (
-                              <Typography variant="body1">{formattedPaymentAmount}</Typography>
-                            )}
-                          </Box>
-                        </TableCell>
-                      </>
-                    </TableRow>
-                  </Fragment>
-                );
-              })}
-            </TableBody>
-          </Table>
-          <Button sx={{ marginTop: 2 }} onClick={() => setPaymentDialogOpen(true)} variant="contained" color="primary">
-            $ Add Payment
-          </Button>
-          <Tooltip
-            disableHoverListener={receiptDocRefId !== undefined}
-            placement="top"
-            title="Patient doesn't have any receipt for this encounter"
-          >
-            <span>
-              <Button
-                sx={{ mt: 2, ml: 2 }}
-                disabled={!receiptDocRefId || isReceiptFetching}
-                onClick={() => setSendReceiptByEmailDialogOpen(true)}
-                variant="contained"
-                color="primary"
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mt: 2 }}>
+        <Typography variant="h5" color="primary.dark">
+          Patient Payments
+        </Typography>
+        <GenericToolTip
+          disableHoverListener={!cardOnFileKnown}
+          customWidth={220}
+          title={
+            cardOnFileKnown ? (
+              <Box
+                sx={{
+                  px: 1,
+                  py: 0.75,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 1,
+                  backgroundColor: 'transparent',
+                  borderRadius: 1,
+                }}
               >
-                Email receipt
-              </Button>
-            </span>
-          </Tooltip>
-        </>
-      )}
+                <Box
+                  component="span"
+                  sx={{
+                    px: 0.75,
+                    py: 0.25,
+                    borderRadius: 1,
+                    fontSize: 11,
+                    fontWeight: 700,
+                    letterSpacing: '0.3px',
+                    color: hasCreditCardOnFileFromList === true ? '#2E7D32' : '#8A1538',
+                    backgroundColor: hasCreditCardOnFileFromList === true ? '#C8E6C9' : '#FFCDD2',
+                  }}
+                >
+                  {cardOnFileChipLabel}
+                </Box>
+                <Typography
+                  variant="caption"
+                  sx={{
+                    color: '#000000',
+                    fontWeight: 500,
+                  }}
+                >
+                  {cardOnFileTooltipText}
+                </Typography>
+              </Box>
+            ) : (
+              ''
+            )
+          }
+        >
+          <Box sx={{ ml: 'auto', display: 'inline-flex', alignItems: 'center' }} aria-label={cardOnFileStatusLabel}>
+            <svg width="38" height="38" viewBox="0 0 56 56" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <rect
+                x="10"
+                y="12"
+                width="36"
+                height="30"
+                rx="5"
+                fill={cardOnFileStatusFill}
+                stroke={cardOnFileStatusStroke}
+                strokeWidth="2"
+              />
+              <rect x="15" y="18" width="26" height="5" rx="1" fill={cardOnFileStatusStroke} opacity="0.7" />
+              <rect x="15" y="27" width="12" height="4" rx="1" fill={cardOnFileStatusStroke} opacity="0.45" />
+              {cardOnFileKnown && hasCreditCardOnFileFromList === true ? (
+                <path
+                  d="M31 31L34.5 34.5L41 28"
+                  stroke={cardOnFileStatusStroke}
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              ) : null}
+              {cardOnFileKnown && hasCreditCardOnFileFromList === false ? (
+                <>
+                  <path d="M32 28L40 36" stroke={cardOnFileStatusStroke} strokeWidth="2" strokeLinecap="round" />
+                  <path d="M40 28L32 36" stroke={cardOnFileStatusStroke} strokeWidth="2" strokeLinecap="round" />
+                </>
+              ) : null}
+            </svg>
+          </Box>
+        </GenericToolTip>
+      </Box>
+      <Table size="small" style={{ tableLayout: 'fixed' }}>
+        <TableBody>
+          {payments.length === 0 && !loading && (
+            <TableRow>
+              <TableCell sx={{ paddingTop: 1, paddingBottom: 1 }}>
+                <Typography variant="body1" color="textSecondary">
+                  No payments recorded.
+                </Typography>
+              </TableCell>
+            </TableRow>
+          )}
+          {payments.map((payment) => {
+            const paymentDateString = DateTime.fromISO(payment.dateISO).toLocaleString(DateTime.DATE_SHORT);
+            const formattedPaymentAmount = formatUsd(payment.amountInCents / 100) ?? '$0.00';
+            return (
+              <Fragment key={idForPaymentDTO(payment)}>
+                <TableRow sx={{ '&:last-child td': { borderBottom: 0 } }}>
+                  <>
+                    <TableCell
+                      sx={{
+                        width: '50%',
+                        color: theme.palette.primary.dark,
+                        paddingLeft: 0,
+                      }}
+                    >
+                      <Box sx={{ display: 'flex', justifyContent: 'flex-start', alignItems: 'center' }}>
+                        {getLabelForPayment(payment)}
+                      </Box>
+                    </TableCell>
+
+                    <TableCell
+                      colSpan={2}
+                      sx={{
+                        textAlign: 'center',
+                        wordWrap: 'break-word',
+                        paddingRight: 0,
+                        paddingTop: 0,
+                        fontSize: '12px',
+                      }}
+                    >
+                      {paymentDateString}
+                    </TableCell>
+
+                    <TableCell
+                      sx={{
+                        textAlign: 'right',
+                        wordWrap: 'break-word',
+                        paddingRight: 0,
+                      }}
+                    >
+                      <Box sx={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center' }}>
+                        {loading ? (
+                          <Skeleton aria-busy="true" width={200} />
+                        ) : (
+                          <Typography variant="body1">{formattedPaymentAmount}</Typography>
+                        )}
+                      </Box>
+                    </TableCell>
+                  </>
+                </TableRow>
+              </Fragment>
+            );
+          })}
+        </TableBody>
+      </Table>
+      <Button sx={{ marginTop: 2 }} onClick={() => setPaymentDialogOpen(true)} variant="contained" color="primary">
+        $ Add Payment
+      </Button>
+      <Tooltip
+        disableHoverListener={receiptDocRefId !== undefined}
+        placement="top"
+        title="Patient doesn't have any receipt for this encounter"
+      >
+        <span>
+          <Button
+            sx={{ mt: 2, ml: 2 }}
+            disabled={!receiptDocRefId || isReceiptFetching}
+            onClick={() => setSendReceiptByEmailDialogOpen(true)}
+            variant="contained"
+            color="primary"
+          >
+            Email receipt
+          </Button>
+        </span>
+      </Tooltip>
       {patient && (
         <PaymentDialog
           open={paymentDialogOpen}
@@ -1558,32 +1545,3 @@ export default function PatientPaymentList({
     </Paper>
   );
 }
-
-const StripeErrorAlert: FC = () => {
-  const theme = useTheme();
-  return (
-    <Box
-      sx={{
-        backgroundColor: theme.palette.common.white,
-        borderColor: theme.palette.error.dark,
-        borderWidth: 1,
-        borderStyle: 'solid',
-        marginTop: 2,
-        padding: 2,
-        borderRadius: '8px',
-        display: 'flex',
-        justifyContent: 'center',
-        alignItems: 'center',
-      }}
-    >
-      <Typography
-        sx={{
-          color: theme.palette.error.dark,
-        }}
-      >
-        The Stripe customer ID associated with this account does not exist and may have been deleted. Collection of
-        payments will be disabled until this issue is resolved. Please report the issue.
-      </Typography>
-    </Box>
-  );
-};

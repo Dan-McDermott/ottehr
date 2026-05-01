@@ -22,18 +22,9 @@ vi.mock('react-router-dom', async () => {
 });
 
 const mockPaymentLocationsData = vi.fn();
-const mockStripeAccountInfoData = vi.fn();
-const mockTerminalReadersData = vi.fn();
-const mockSaveMutate = vi.fn();
 
 vi.mock('src/rcm/state/payments/payments.queries', () => ({
   usePaymentLocationsQuery: () => mockPaymentLocationsData(),
-  useStripeAccountInfoQuery: () => mockStripeAccountInfoData(),
-  useTerminalReadersQuery: () => mockTerminalReadersData(),
-  useSaveTerminalLocationMutation: () => ({
-    mutate: mockSaveMutate,
-    isPending: false,
-  }),
 }));
 
 vi.mock('src/hooks/useAppClients', () => ({
@@ -91,16 +82,6 @@ const createWrapper = () => {
 describe('PaymentLocationDetailPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-
-    mockStripeAccountInfoData.mockReturnValue({
-      data: undefined,
-      isLoading: false,
-      isError: false,
-    });
-    mockTerminalReadersData.mockReturnValue({
-      data: undefined,
-      isLoading: false,
-    });
   });
 
   it('shows loading spinner while data is loading', () => {
@@ -186,63 +167,5 @@ describe('PaymentLocationDetailPage', () => {
     render(<PaymentLocationDetailPage />, { wrapper: createWrapper() });
     const breadcrumbLink = screen.getByRole('link', { name: 'Payment Locations' });
     await user.click(breadcrumbLink);
-  });
-
-  it('shows Stripe Connect section with invalid format chip for bad account ID', () => {
-    const loc = makeLocation({
-      extension: [{ url: 'https://fhir.ottehr.com/Extension/stripe-account-id', valueString: 'bad_id' }],
-    });
-    mockPaymentLocationsData.mockReturnValue({
-      data: [{ location: loc, supportsVirtualVisits: false }],
-      isLoading: false,
-    });
-
-    render(<PaymentLocationDetailPage />, { wrapper: createWrapper() });
-    expect(screen.getByText('Invalid Account ID Format')).toBeInTheDocument();
-  });
-
-  it('shows Stripe Account Connected chip when valid account data is loaded', () => {
-    const loc = makeLocation({
-      extension: [{ url: 'https://fhir.ottehr.com/Extension/stripe-account-id', valueString: 'acct_1234567890ab' }],
-    });
-    mockPaymentLocationsData.mockReturnValue({
-      data: [{ location: loc, supportsVirtualVisits: false }],
-      isLoading: false,
-    });
-    mockStripeAccountInfoData.mockReturnValue({
-      data: {
-        accountInfo: { businessName: 'Acme Health', dbaName: null, taxId: null, address: null },
-        terminalLocations: [],
-        error: null,
-      },
-      isLoading: false,
-      isError: false,
-    });
-
-    render(<PaymentLocationDetailPage />, { wrapper: createWrapper() });
-    expect(screen.getByText('Stripe Account Connected')).toBeInTheDocument();
-    expect(screen.getByText('Acme Health')).toBeInTheDocument();
-  });
-
-  it('renders stripe account error chip when data has an error', () => {
-    const loc = makeLocation({
-      extension: [{ url: 'https://fhir.ottehr.com/Extension/stripe-account-id', valueString: 'acct_1234567890ab' }],
-    });
-    mockPaymentLocationsData.mockReturnValue({
-      data: [{ location: loc, supportsVirtualVisits: false }],
-      isLoading: false,
-    });
-    mockStripeAccountInfoData.mockReturnValue({
-      data: {
-        accountInfo: null,
-        terminalLocations: [],
-        error: 'Stripe account not found',
-      },
-      isLoading: false,
-      isError: false,
-    });
-
-    render(<PaymentLocationDetailPage />, { wrapper: createWrapper() });
-    expect(screen.getByText('Stripe account not found')).toBeInTheDocument();
   });
 });
