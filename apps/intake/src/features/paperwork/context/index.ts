@@ -3,10 +3,8 @@ import { QuestionnaireResponse, QuestionnaireResponseItem } from 'fhir/r4b';
 import { useOutletContext } from 'react-router-dom';
 import {
   AppointmentSummary,
-  CreditCardInfo,
   IntakeQuestionnaireItem,
   PaperworkPatient,
-  PaymentMethodSetupZambdaOutput,
   QuestionnaireFormFields,
   RHCreditCardInfo,
   RHListPaymentMethodsZambdaOutput,
@@ -22,13 +20,7 @@ export interface PaperworkContext
   appointment: AppointmentSummary | undefined;
   patient: PaperworkPatient | undefined;
   questionnaireResponse: QuestionnaireResponse | undefined;
-  cardsAreLoading: boolean;
-  paymentMethodStateInitializing: boolean;
-  paymentMethods: CreditCardInfo[];
-  stripeSetupData: PaymentMethodSetupZambdaOutput | undefined;
-  // Rectangle Health (v3) — primary credit-card paperwork path. The Stripe
-  // fields above are kept wired for telemed/legacy callers per the
-  // "swap, don't demolish" operating principle.
+  // Rectangle Health credit-card paperwork path.
   rhPaymentMethods: RHCreditCardInfo[];
   rhCardsAreLoading: boolean;
   rhPaymentMethodStateInitializing: boolean;
@@ -37,17 +29,6 @@ export interface PaperworkContext
   ) => Promise<QueryObserverResult<RHListPaymentMethodsZambdaOutput, Error>>;
   setContinueLabel?: (label: string | undefined) => void;
   saveButtonDisabled?: boolean;
-  refetchPaymentMethods: (options?: RefetchOptions | undefined) => Promise<
-    QueryObserverResult<
-      {
-        cards: CreditCardInfo[];
-      },
-      Error
-    >
-  >;
-  refetchSetupData: (
-    options?: RefetchOptions | undefined
-  ) => Promise<QueryObserverResult<PaymentMethodSetupZambdaOutput, Error>>;
   setSaveButtonDisabled: (newVal: boolean) => void;
   findAnswerWithLinkId: (linkId: string) => QuestionnaireResponseItem | undefined;
 }
