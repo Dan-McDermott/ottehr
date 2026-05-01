@@ -28,8 +28,6 @@ const buildRhCardPaymentsFromNotices = (paymentNotices: PaymentNotice[]): Patien
     return [
       {
         paymentMethod: 'card' as const,
-        stripePaymentId: undefined,
-        stripePaymentMethodId: undefined,
         rhTransactionId,
         amountInCents: Math.round((paymentNotice.amount.value ?? 0) * 100),
         fhirPaymentNotificationId: paymentNotice.id,

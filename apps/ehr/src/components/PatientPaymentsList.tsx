@@ -27,7 +27,7 @@ import StarterKit from '@tiptap/starter-kit';
 import { Appointment, ChargeItemDefinition, DocumentReference, Encounter, Organization, Patient } from 'fhir/r4b';
 import { DateTime } from 'luxon';
 import { enqueueSnackbar } from 'notistack';
-import { FC, Fragment, ReactElement, useCallback, useEffect, useMemo, useState } from 'react';
+import { Fragment, ReactElement, useCallback, useEffect, useMemo, useState } from 'react';
 import { getEligibilityCheckDetailsForCoverage } from 'src/features/visits/shared/components/patient/InsuranceSection';
 import { useOystehrAPIClient } from 'src/features/visits/shared/hooks/useOystehrAPIClient';
 import { useChartData } from 'src/features/visits/shared/stores/appointment/appointment.store';
@@ -39,7 +39,6 @@ import { useFindApplicableFeeScheduleQuery } from 'src/rcm/state/fee-schedules/f
 import { CreditCardBrandIcon } from 'ui-components';
 import {
   APIError,
-  APIErrorCode,
   CASE_RATE_CODE,
   CashOrCardPayment,
   CoverageCheckWithDetails,
@@ -469,11 +468,6 @@ export default function PatientPaymentList({
       void refetchCardOnFile();
     }
   }, [oystehrZambda, patient?.id, appointment?.id, refetchCardOnFile]);
-
-  const stripeCustomerDeletedError =
-    paymentListError && isApiError(paymentListError)
-      ? (paymentListError as APIError).code === APIErrorCode.STRIPE_CUSTOMER_ID_DOES_NOT_EXIST
-      : false;
 
   const receiptDocRefId = receiptDocRef?.id;
 
@@ -1343,10 +1337,7 @@ export default function PatientPaymentList({
           </Box>
         )}
       </Container>
-      {stripeCustomerDeletedError && <StripeErrorAlert />}
-      {!stripeCustomerDeletedError && (
-        <>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mt: 2 }}>
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mt: 2 }}>
             <Typography variant="h5" color="primary.dark">
               Patient Payments
             </Typography>
@@ -1513,9 +1504,7 @@ export default function PatientPaymentList({
                 Email receipt
               </Button>
             </span>
-          </Tooltip>
-        </>
-      )}
+      </Tooltip>
       {patient && (
         <PaymentDialog
           open={paymentDialogOpen}
@@ -1558,32 +1547,3 @@ export default function PatientPaymentList({
     </Paper>
   );
 }
-
-const StripeErrorAlert: FC = () => {
-  const theme = useTheme();
-  return (
-    <Box
-      sx={{
-        backgroundColor: theme.palette.common.white,
-        borderColor: theme.palette.error.dark,
-        borderWidth: 1,
-        borderStyle: 'solid',
-        marginTop: 2,
-        padding: 2,
-        borderRadius: '8px',
-        display: 'flex',
-        justifyContent: 'center',
-        alignItems: 'center',
-      }}
-    >
-      <Typography
-        sx={{
-          color: theme.palette.error.dark,
-        }}
-      >
-        The Stripe customer ID associated with this account does not exist and may have been deleted. Collection of
-        payments will be disabled until this issue is resolved. Please report the issue.
-      </Typography>
-    </Box>
-  );
-};
