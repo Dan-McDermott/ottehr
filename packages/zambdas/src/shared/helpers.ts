@@ -5,6 +5,7 @@ import {
   Appointment,
   Attachment,
   Encounter,
+  Extension,
   FhirResource,
   Location,
   Meta,
@@ -27,6 +28,7 @@ import {
   TELEMED_VIDEO_ROOM_CODE,
   TIMEZONES,
 } from 'utils';
+import { CODE_SYSTEM_CPT_MODIFIER, EXTENSION_URL_CPT_MODIFIER } from 'utils/lib/helpers/rcm';
 import { ZambdaInput } from './types';
 
 export function createOystehrClient(token: string, secrets: Secrets | null): Oystehr {
@@ -253,3 +255,16 @@ export function resolveTimezone(schedule?: Schedule, location?: Location, fallba
   }
   return fallback;
 }
+
+export const makeCptModifierExtension = (input: { code: string; display: string }[]): Extension => {
+  return {
+    url: EXTENSION_URL_CPT_MODIFIER,
+    valueCodeableConcept: {
+      coding: input.map((cptCodeInfo) => ({
+        system: CODE_SYSTEM_CPT_MODIFIER,
+        code: cptCodeInfo.code,
+        display: cptCodeInfo.display,
+      })),
+    },
+  };
+};

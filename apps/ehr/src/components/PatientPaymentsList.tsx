@@ -232,15 +232,14 @@ export default function PatientPaymentList({
   } = useQuery({
     queryKey: ['card-on-file', patient?.id, appointment?.id],
     queryFn: async () => {
-      if (!oystehrZambda || !patient?.id || !appointment?.id) return false;
+      if (!oystehrZambda || !patient?.id) return false;
       const result = await oystehrZambda.zambda.execute({
-        id: 'payment-methods-list',
-        beneficiaryPatientId: patient.id,
-        appointmentId: appointment.id,
+        id: 'rh-payment-methods-list',
+        patientId: patient.id,
       });
       return deriveCardOnFileStatus(result.output);
     },
-    enabled: !!oystehrZambda && !!patient?.id && !!appointment?.id,
+    enabled: !!oystehrZambda && !!patient?.id,
   });
 
   const {

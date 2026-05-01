@@ -26,7 +26,6 @@ import { accountMatchesType } from '../../../ehr/shared/harvest';
 import {
   checkOrCreateM2MClientToken,
   createOystehrClient,
-  getCandidEncounterIdFromEncounter,
   getStripeClient,
   resolveTimezone,
   sendSmsForPatient,
@@ -55,12 +54,10 @@ export const index = wrapHandler(ZAMBDA_NAME, async (input: ZambdaInput): Promis
     const { patient, encounter, account, appointment, location, schedule, stripeAccountId } = fhirResources;
     console.log('Fhir resources fetched');
 
-    console.log('Getting stripe and candid ids');
+    console.log('Getting stripe customer id');
     const stripeCustomerId = getStripeCustomerIdFromAccount(account, stripeAccountId);
     if (!stripeCustomerId) throw new Error('StripeCustomerId is not found');
-    const candidEncounterId = getCandidEncounterIdFromEncounter(encounter);
-    if (!candidEncounterId) throw new Error('CandidEncounterId is not found');
-    console.log('Stripe and candid ids retrieved');
+    console.log('Stripe customer id retrieved');
 
     const timezone = resolveTimezone(schedule, location);
     const visitDate = formatDateToMDYWithTime(appointment.start, timezone)?.date;

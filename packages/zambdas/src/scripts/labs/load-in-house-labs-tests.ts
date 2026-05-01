@@ -1,5 +1,5 @@
 import { BatchInputRequest } from '@oystehr/sdk';
-import { ProcedureModifier } from 'candidhealth/api';
+type ProcedureModifier = string;
 import { Command } from 'commander';
 import {
   ActivityDefinition,
