@@ -1384,13 +1384,6 @@
       "src": "src/ehr/tasks/create-manual-task/index",
       "zip": ".dist/zips/create-manual-task.zip"
     },
-    "SUB-SEND-INVOICE-TO-PATIENT": {
-      "name": "sub-send-invoice-to-patient",
-      "type": "subscription",
-      "runtime": "nodejs22.x",
-      "src": "src/subscriptions/task/sub-send-invoice-to-patient/index",
-      "zip": ".dist/zips/sub-send-invoice-to-patient.zip"
-    },
     "CREATE-INVOICES-TASKS": {
       "name": "create-invoices-tasks",
       "type": "cron",
