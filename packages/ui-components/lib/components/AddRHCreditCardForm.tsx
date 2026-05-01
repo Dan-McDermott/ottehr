@@ -13,14 +13,15 @@ import {
   normaliseCardNumber,
   validateCardData,
 } from '../utils/cipherpayEncryption';
-import type { AddCreditCardFormHandle } from './AddCreditCardForm';
+export interface AddCreditCardFormHandle {
+  getCardState: () => { complete: boolean; error?: { message: string } };
+  saveCard: () => Promise<{ success: boolean; error?: string }>;
+}
 
 // Rectangle Health (v3) CipherPay-encrypted credit-card form. Captures card
 // data in plain inputs, encrypts it client-side via cipherpayEncryption, then
 // delegates persistence to the consumer-supplied `setupCard` callback (which
-// wraps the `rh-payment-methods-setup` zambda). Implements the same handle
-// shape as the Stripe `AddCreditCardForm` so callers can swap form types
-// without changing their imperative-handle wiring.
+// wraps the `rh-payment-methods-setup` zambda).
 type RHCreditCardFormProps = {
   disabled: boolean;
   isSaving?: boolean;
