@@ -89,5 +89,3 @@ export const useAnswerOptionsQuery = (
 
   return queryResult;
 };
-
-
