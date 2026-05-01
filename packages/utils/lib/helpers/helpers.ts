@@ -1,5 +1,5 @@
 import Oystehr, { OystehrConfig } from '@oystehr/sdk';
-import { NetworkType } from 'candidhealth/api/resources/preEncounter/resources/coverages/resources/v1';
+type NetworkType = string;
 import {
   Appointment,
   Coverage,

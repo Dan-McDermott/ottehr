@@ -28,8 +28,8 @@ import {
   TELEMED_VIDEO_ROOM_CODE,
   TIMEZONES,
 } from 'utils';
-import { ZambdaInput } from './types';
 import { CODE_SYSTEM_CPT_MODIFIER, EXTENSION_URL_CPT_MODIFIER } from 'utils/lib/helpers/rcm';
+import { ZambdaInput } from './types';
 
 export function createOystehrClient(token: string, secrets: Secrets | null): Oystehr {
   const FHIR_API = getSecret(SecretsKeys.FHIR_API, secrets).replace(/\/r4/g, '');

@@ -94,9 +94,9 @@ import {
   TaskCoding,
   VISIT_CONSULT_NOTE_DOC_REF_CODING_CODE,
 } from 'utils';
+import { CODE_SYSTEM_CPT, CODE_SYSTEM_CPT_MODIFIER, EXTENSION_URL_CPT_MODIFIER } from 'utils/lib/helpers/rcm';
 import { removePrefix } from '../appointment/helpers';
 import { fillMeta } from '../helpers';
-import { CODE_SYSTEM_CPT, CODE_SYSTEM_CPT_MODIFIER, EXTENSION_URL_CPT_MODIFIER } from 'utils/lib/helpers/rcm';
 import { isDocumentPublished, PdfDocumentReferencePublishedStatuses, PdfInfo } from '../pdf/pdf-utils';
 import { saveOrUpdateResourceRequest } from '../resources.helpers';
 
@@ -1969,9 +1969,7 @@ export const createAccidentCondition = (
   });
 };
 
-const getCptModifierCodeFromProcedure = (
-  fhirProcedure: Procedure
-): { code: string; display: string }[] | undefined => {
+const getCptModifierCodeFromProcedure = (fhirProcedure: Procedure): { code: string; display: string }[] | undefined => {
   const coding = fhirProcedure.code?.coding?.find((c) => c.system === CODE_SYSTEM_CPT);
   if (!coding) return;
 

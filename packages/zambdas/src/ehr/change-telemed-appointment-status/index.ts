@@ -1,4 +1,4 @@
-import { BatchInputPostRequest } from '@oystehr/sdk';
+import Oystehr, { BatchInputPostRequest } from '@oystehr/sdk';
 import { captureException } from '@sentry/aws-serverless';
 import { APIGatewayProxyResult } from 'aws-lambda';
 import { ChargeItem, Task } from 'fhir/r4b';
@@ -277,4 +277,3 @@ export const performEffect = async (
       : 'Appointment status successfully changed.',
   };
 };
-

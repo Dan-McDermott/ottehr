@@ -5,7 +5,7 @@ import Oystehr, {
   BatchInputPutRequest,
   BatchInputRequest,
 } from '@oystehr/sdk';
-import { NetworkType } from 'candidhealth/api/resources/preEncounter/resources/coverages/resources/v1';
+type NetworkType = string;
 import { randomUUID } from 'crypto';
 import { Operation, RemoveOperation } from 'fast-json-patch';
 import {
