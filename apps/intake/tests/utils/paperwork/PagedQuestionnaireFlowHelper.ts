@@ -28,7 +28,7 @@ import {
 import { UploadDocs } from '../UploadDocs';
 
 // Test credit card constants
-const CARD_NUMBER = '4242424242424242'; // Stripe test card
+const CARD_NUMBER = '4242424242424242'; // generic test PAN
 const CARD_EXP_DATE = DateTime.now().plus({ years: 3 }).toFormat('MM/yy');
 const CARD_CVV = '123';
 
@@ -488,7 +488,7 @@ export class PagedQuestionnaireFlowHelper {
    *
    * This method:
    * 1. Checks if card is already saved
-   * 2. Fills card fields in Stripe iframe
+   * 2. Fills card fields in the card form
    * 3. Clicks Continue (triggers card save)
    * 4. Detects if error modal appears (waits for modal OR navigation)
    * 5. If modal appears: verifies modal content and clicks "Edit card information"
@@ -547,8 +547,7 @@ export class PagedQuestionnaireFlowHelper {
 
       await this.clickEditCardInformation();
 
-      const stripeIframe = this.page.frameLocator('iframe[title="Secure card payment input frame"]');
-      await expect(stripeIframe.locator('[data-elements-stable-field-name="cardNumber"]')).toBeVisible();
+      await expect(this.page.getByTestId(dataTestIds.rhCardNumberInput)).toBeVisible();
     } else {
       await this.clickBack();
       await this.waitForPage();
@@ -560,7 +559,7 @@ export class PagedQuestionnaireFlowHelper {
    * Fill credit card information and verify it was saved
    *
    * This method:
-   * 1. Fills card fields in Stripe iframe
+   * 1. Fills card fields in the card form
    * 2. Clicks Continue (triggers card save)
    * 3. Waits for navigation to next page
    * 4. Goes back to credit card page
