@@ -1,20 +1,8 @@
 import Oystehr from '@oystehr/sdk';
 import { APIGatewayProxyResult } from 'aws-lambda';
 import { Organization, Practitioner } from 'fhir/r4b';
-import {
-  checkForStripeCustomerDeletedError,
-  getConsentAndRelatedDocRefsForAppointment,
-  PatientPaymentDTO,
-  Secrets,
-  VisitDetailsResponse,
-} from 'utils';
-import {
-  checkOrCreateM2MClientToken,
-  createOystehrClient,
-  getStripeClient,
-  wrapHandler,
-  ZambdaInput,
-} from '../../../shared';
+import { getConsentAndRelatedDocRefsForAppointment, PatientPaymentDTO, Secrets, VisitDetailsResponse } from 'utils';
+import { checkOrCreateM2MClientToken, createOystehrClient, wrapHandler, ZambdaInput } from '../../../shared';
 import { makeVisitDetailsPdfDocumentReference } from '../../../shared/pdf/make-visit-details-document-reference';
 import { createVisitDetailsPdf } from '../../../shared/pdf/visit-details-pdf';
 import { getAppointmentAndRelatedResources } from '../../../shared/pdf/visit-details-pdf/get-video-resources';
@@ -96,22 +84,12 @@ export const performEffect = async (
   let payments: PatientPaymentDTO[] = [];
   if (encounter.id && account) {
     try {
-      const stripeClient = getStripeClient(secrets);
       payments = await getPaymentsForEncounter({
         oystehrClient: oystehr,
-        stripeClient,
-        account,
         encounterId: encounter.id,
-        patientId: patient.id,
       });
     } catch (error) {
       console.error('Failed to fetch payments for PDF generation:', error);
-      try {
-        checkForStripeCustomerDeletedError(error);
-      } catch (customerError) {
-        console.error(`Error: Stripe customer deleted, PDF will be generated without payment info. ${customerError}`);
-      }
-
       payments = [];
     }
   }
