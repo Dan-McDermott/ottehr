@@ -48,6 +48,7 @@ export default ({ mode }: { mode: string }): UserConfig => {
       open: !process.env.VITE_NO_OPEN,
       host: '0.0.0.0',
       port: env.PORT ? parseInt(env.PORT) : undefined,
+      allowedHosts: ['.trycloudflare.com', 'localhost'],
       https:
         tlsCertExists && tlsKeyExists
           ? {

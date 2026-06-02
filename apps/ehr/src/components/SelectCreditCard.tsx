@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unused-vars */
 import {
   Alert,
   Autocomplete,
@@ -9,19 +8,19 @@ import {
   TextField,
 } from '@mui/material';
 import { Box } from '@mui/system';
-import { Elements } from '@stripe/react-stripe-js';
 import { Patient } from 'fhir/r4b';
 import { FC, useState } from 'react';
-import { useGetPaymentMethods } from 'src/hooks/useGetPaymentMethods';
-import { useSetDefaultPaymentMethod } from 'src/hooks/useSetDefaultPaymentMethod';
-import { useSetupStripe } from 'src/hooks/useSetupStripe';
-import { AddCreditCardForm, CreditCardBrandIcon, loadStripe } from 'ui-components';
-import { CreditCardInfo } from 'utils';
+import { useGetFinixPaymentConfig } from 'src/features/payment-methods/rh/hooks/useGetFinixPaymentConfig';
+import { useGetFinixPaymentMethods } from 'src/features/payment-methods/rh/hooks/useGetRHPaymentMethods';
+import { useSetDefaultFinixPaymentMethod } from 'src/features/payment-methods/rh/hooks/useSetDefaultRHPaymentMethod';
+import { useSetupFinixPaymentMethod } from 'src/features/payment-methods/rh/hooks/useSetupRHPaymentMethod';
+import { AddFinixCreditCardForm, CreditCardBrandIcon } from 'ui-components';
+import { FinixCreditCardInfo } from 'utils';
 
 interface CardOption {
   id: string;
   label: string;
-  brand?: CreditCardInfo['brand'];
+  brand?: FinixCreditCardInfo['brand'];
   isNew?: boolean;
 }
 
@@ -33,48 +32,36 @@ interface CreditCardContentProps {
   error?: string;
 }
 
-const labelForCard = (card: CreditCardInfo): string => {
+const labelForCard = (card: FinixCreditCardInfo): string => {
   const formattedBrand = card.brand ? card.brand.charAt(0).toUpperCase() + card.brand.slice(1) : 'Card';
-  return `${formattedBrand} •••• ${card.lastFour}${card.default ? ' (Primary)' : ''}`;
+  return `${formattedBrand} •••• ${card.last4 ?? '----'}${card.default ? ' (Primary)' : ''}`;
 };
 
 const NEW_CARD = { id: 'new', label: 'Add new card' };
 
 const CreditCardContent: FC<CreditCardContentProps> = (props) => {
-  const { patient, appointmentId, selectedCardId, handleCardSelected, error } = props;
-  const [cards, setCards] = useState<CreditCardInfo[]>([]);
+  const { patient, selectedCardId, handleCardSelected, error } = props;
+  const [cards, setCards] = useState<FinixCreditCardInfo[]>([]);
 
   const [errorMessage, setErrorMessage] = useState<string | undefined>(undefined);
 
-  const {
-    data: setupData,
-    isFetching: isSetupDataFetching,
-    isLoading: isSetupDataLoading,
-    refetch: refetchSetupData,
-    isRefetching: isSetupDataRefetching,
-  } = useSetupStripe(patient?.id, appointmentId);
-
-  const stripePromise = loadStripe(import.meta.env.VITE_APP_STRIPE_KEY, setupData?.stripeAccount);
-
-  const { mutate: setDefault } = useSetDefaultPaymentMethod(patient?.id, appointmentId);
+  const { mutate: setDefault } = useSetDefaultFinixPaymentMethod(patient?.id);
+  const { mutateAsync: setupFinixCard } = useSetupFinixPaymentMethod(patient?.id);
+  const { data: finixConfig, isFetching: finixConfigLoading } = useGetFinixPaymentConfig({ patientId: patient?.id });
 
   const {
     isFetching: cardsAreLoading,
     isFetched: cardsFetched,
     refetch: refetchPaymentMethods,
-  } = useGetPaymentMethods({
-    beneficiaryPatientId: patient?.id,
-    appointmentId,
-    setupCompleted: Boolean(setupData),
+  } = useGetFinixPaymentMethods({
+    patientId: patient?.id,
     onSuccess: (data) => {
       if (!data) return;
-
       setCards(data.cards ?? []);
       const defaultCard = data.cards.find((card) => card.default);
       if (defaultCard && !selectedCardId) {
         handleCardSelected(defaultCard.id);
       }
-      void refetchSetupData();
     },
   });
 
@@ -84,7 +71,7 @@ const CreditCardContent: FC<CreditCardContentProps> = (props) => {
     return hasNone || addingOne;
   })();
 
-  const initializing = isSetupDataFetching || isSetupDataLoading;
+  const initializing = !cardsFetched && cardsAreLoading;
 
   const cardOptions: CardOption[] = [
     ...cards.map((card) => ({ id: card.id, label: labelForCard(card), brand: card.brand })),
@@ -93,6 +80,15 @@ const CreditCardContent: FC<CreditCardContentProps> = (props) => {
 
   const selectedCard = cardOptions.find((card) => card.id === selectedCardId);
   const someDefault = cards.some((card) => card.default);
+
+  const setupCard = async (params: { token: string; brand?: string }): Promise<{ paymentMethodId: string }> => {
+    const result = await setupFinixCard({
+      token: params.token,
+      makeDefault: !someDefault,
+    });
+    await refetchPaymentMethods();
+    return { paymentMethodId: result.paymentMethodId };
+  };
 
   const handleNewPaymentMethod = async (id: string, makeDefault: boolean): Promise<void> => {
     if (makeDefault) {
@@ -192,29 +188,38 @@ const CreditCardContent: FC<CreditCardContentProps> = (props) => {
         }}
       />
 
-      <Elements stripe={stripePromise} options={{ clientSecret: setupData?.clientSecret }}>
-        <Box
-          sx={{
-            width: '100%',
-            display: showNewCard ? 'flex' : 'none',
-            justifyContent: 'center',
-            alignItems: 'flex-start',
-            flexDirection: 'column',
-            marginTop: 2,
-          }}
-        >
-          <AddCreditCardForm
-            clientSecret={setupData?.clientSecret ?? ''}
+      <Box
+        sx={{
+          width: '100%',
+          display: showNewCard ? 'flex' : 'none',
+          justifyContent: 'center',
+          alignItems: 'flex-start',
+          flexDirection: 'column',
+          marginTop: 2,
+        }}
+      >
+        {finixConfigLoading && !finixConfig ? (
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <CircularProgress size={20} />
+            <FormHelperText>Loading secure card form…</FormHelperText>
+          </Box>
+        ) : finixConfig ? (
+          <AddFinixCreditCardForm
+            environment={finixConfig.environment}
+            applicationId={finixConfig.applicationId}
             disabled={false}
+            setupCard={setupCard}
             selectPaymentMethod={(id) => {
               void handleNewPaymentMethod(id, !someDefault);
             }}
             condition="I have obtained the consent to add a card on file from the patient"
             showAddButton={true}
           />
-          {error && !showCardList && <FormHelperText error={Boolean(error)}>{error}</FormHelperText>}
-        </Box>
-      </Elements>
+        ) : (
+          <FormHelperText error>Unable to load the secure card form. Please try again.</FormHelperText>
+        )}
+        {error && !showCardList && <FormHelperText error={Boolean(error)}>{error}</FormHelperText>}
+      </Box>
 
       <Snackbar
         anchorOrigin={{ vertical: 'top', horizontal: 'right' }}

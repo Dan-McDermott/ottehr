@@ -1,18 +1,6 @@
 import Oystehr, { User } from '@oystehr/sdk';
-import { Account, Identifier } from 'fhir/r4b';
-import Stripe from 'stripe';
-import {
-  ACCOUNT_PAYMENT_PROVIDER_ID_SYSTEM_STRIPE,
-  ACCOUNT_PAYMENT_PROVIDER_ID_SYSTEM_STRIPE_ACCOUNT,
-  FHIR_RESOURCE_NOT_FOUND,
-  getSecret,
-  getStripeAccountForAppointmentOrEncounter,
-  getStripeCustomerIdFromAccount,
-  NOT_AUTHORIZED,
-  Secrets,
-  SecretsKeys,
-  STRIPE_CUSTOMER_ID_NOT_FOUND_ERROR,
-} from 'utils';
+import { Account } from 'fhir/r4b';
+import { NOT_AUTHORIZED, Secrets } from 'utils';
 import { getUser, userHasAccessToPatient, ZambdaInput } from '../../shared';
 
 export interface BasePaymentManagementInput {
@@ -20,7 +8,6 @@ export interface BasePaymentManagementInput {
   token: string;
   beneficiaryPatientId: string;
   payorProfile: string;
-  stripeCustomerId?: string;
 }
 
 export const getBillingAccountForPatient = async (
@@ -46,93 +33,6 @@ export const getBillingAccountForPatient = async (
   });
   return accounts.unbundle()[0];
 };
-
-export interface PaymentCard {
-  id: string;
-  brand: string;
-  expirationMonth: number;
-  expirationYear: number;
-  lastFour: string;
-  cardholder?: string;
-}
-export interface StripeEnvironmentConfig {
-  publicKey: string;
-  secretKey: string;
-}
-
-export interface StripeEnvironment extends StripeEnvironmentConfig {
-  paymentMethodTypes: string;
-  apiVersion: string;
-}
-
-const validateStripeEnvironment = (secrets: Secrets | null): StripeEnvironment => {
-  const secretKey = getSecret(SecretsKeys.STRIPE_SECRET_KEY, secrets);
-  const publicKey = getSecret(SecretsKeys.STRIPE_PUBLIC_KEY, secrets);
-
-  if (!secretKey) {
-    throw '"STRIPE_SECRET_KEY" environment variable was not set.';
-  }
-  if (!publicKey) {
-    throw '"STRIPE_PUBLIC_KEY" environment variable was not set.';
-  }
-
-  return {
-    publicKey,
-    secretKey,
-    paymentMethodTypes: 'card',
-    apiVersion: '2024-04-10',
-  };
-};
-
-export function getStripeClient(secrets: Secrets | null): Stripe {
-  const env = validateStripeEnvironment(secrets);
-  return new Stripe(env.secretKey, {
-    // @ts-expect-error default api version older than sdk
-    apiVersion: env.apiVersion,
-  });
-}
-
-export const makeStripeCustomerId = (stripeId: string, stripeAccount: string | undefined): Identifier => {
-  if (!stripeAccount) {
-    return {
-      system: ACCOUNT_PAYMENT_PROVIDER_ID_SYSTEM_STRIPE,
-      value: stripeId,
-    };
-  }
-
-  return {
-    system: ACCOUNT_PAYMENT_PROVIDER_ID_SYSTEM_STRIPE,
-    value: stripeId,
-    extension: [
-      {
-        url: ACCOUNT_PAYMENT_PROVIDER_ID_SYSTEM_STRIPE_ACCOUNT,
-        valueString: stripeAccount,
-      },
-    ],
-  };
-};
-
-interface StripeAccountValidationInput {
-  patientId: string;
-  appointmentId: string;
-  oystehrClient: Oystehr;
-}
-export async function getStripeCustomerId(input: StripeAccountValidationInput): Promise<{ stripeCustomerId: string }> {
-  const { patientId, appointmentId, oystehrClient } = input;
-
-  const patientAccount = await getBillingAccountForPatient(patientId, oystehrClient);
-  if (!patientAccount) {
-    throw FHIR_RESOURCE_NOT_FOUND('Account');
-  }
-
-  const stripeAccount = await getStripeAccountForAppointmentOrEncounter({ appointmentId }, oystehrClient);
-
-  const stripeCustomerId = getStripeCustomerIdFromAccount(patientAccount, stripeAccount);
-  if (!stripeCustomerId) {
-    throw STRIPE_CUSTOMER_ID_NOT_FOUND_ERROR;
-  }
-  return { stripeCustomerId };
-}
 
 interface PatientAccountCheckInput {
   beneficiaryPatientId: string;

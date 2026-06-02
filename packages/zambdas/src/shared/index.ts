@@ -1,7 +1,6 @@
 export * from './accessPolicies';
 export * from './appointment';
 export * from './auth';
-export * from './candid';
 export * from './chart-data';
 export * from './communication';
 export * from './constants';
@@ -28,6 +27,6 @@ export * from './validateBundleAndExtractAppointment';
 export * from './validation';
 export * from './waitTimeUtils';
 export * from './z3Utils';
-export * from './stripeIntegration';
+export * from './finix';
 export * from './postgrid';
 export * from './statements';

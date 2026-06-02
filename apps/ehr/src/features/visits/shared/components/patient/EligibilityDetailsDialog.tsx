@@ -39,6 +39,10 @@ const STATUS_TO_STYLE_MAP: Record<EligibilityCheckSimpleStatus, { bgColor: strin
     bgColor: '#FECDD2',
     textColor: '#B71C1C',
   },
+  PENDING: {
+    bgColor: '#FFF3E0',
+    textColor: '#E65100',
+  },
 };
 
 interface EligibilityError {
@@ -65,6 +69,8 @@ const getStatusDisplay = (status: InsuranceEligibilityCheckStatus): { text: stri
       return { text: 'Eligibility Not Checked', color: '#B71C1C' };
     case InsuranceEligibilityCheckStatus.eligibilityNotConfirmed:
       return { text: 'Eligibility Not Confirmed', color: '#B71C1C' };
+    case InsuranceEligibilityCheckStatus.eligibilityPending:
+      return { text: 'Checking Eligibility…', color: '#E65100' };
     default:
       return { text: 'Unknown Status', color: '#757575' };
   }

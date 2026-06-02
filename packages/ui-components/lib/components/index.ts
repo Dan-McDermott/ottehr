@@ -1,4 +1,4 @@
-export * from './AddCreditCardForm';
+export * from './AddFinixCreditCardForm';
 export * from './CreditCardBrandIcon';
 export * from './PharmacyDisplay';
 export * from './PharmacySearch';

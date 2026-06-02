@@ -1,7 +1,5 @@
-import Oystehr, { SearchParam } from '@oystehr/sdk';
 import { APIGatewayProxyResult } from 'aws-lambda';
 import { Account } from 'fhir/r4b';
-import Stripe from 'stripe';
 import {
   FHIR_RESOURCE_NOT_FOUND,
   INVALID_INPUT_ERROR,
@@ -11,16 +9,8 @@ import {
   MISSING_REQUEST_BODY,
   MISSING_REQUIRED_PARAMETERS,
   NOT_AUTHORIZED,
-  Secrets,
 } from 'utils';
-import {
-  createOystehrClient,
-  getAuth0Token,
-  getStripeClient,
-  lambdaResponse,
-  wrapHandler,
-  ZambdaInput,
-} from '../../../shared';
+import { createOystehrClient, getAuth0Token, lambdaResponse, wrapHandler, ZambdaInput } from '../../../shared';
 import { getAccountAndCoverageResourcesForPatient } from '../../shared/harvest';
 import { getPaymentsForPatient } from '../helpers';
 
@@ -41,7 +31,7 @@ export const index = wrapHandler(ZAMBDA_NAME, async (input: ZambdaInput): Promis
   }
 
   const secrets = input.secrets;
-  const { patientId } = validatedParameters;
+  const { patientId, encounterId } = validatedParameters;
   console.groupEnd();
   console.debug('validateRequestParameters success');
 
@@ -61,77 +51,16 @@ export const index = wrapHandler(ZAMBDA_NAME, async (input: ZambdaInput): Promis
     throw FHIR_RESOURCE_NOT_FOUND('Account');
   }
 
-  const effectInput = await complexValidation(
-    {
-      ...validatedParameters,
-      secrets: input.secrets,
-    },
-    oystehrClient
-  );
+  const payments = await getPaymentsForPatient({ oystehrClient, patientId, encounterId });
 
-  const response = await performEffect(effectInput);
-
-  return lambdaResponse(200, response);
-});
-interface EffectInput extends ListPatientPaymentInput {
-  oystehrClient: Oystehr;
-  stripeClient: Stripe;
-  patientAccount: Account;
-}
-const performEffect = async (input: EffectInput): Promise<ListPatientPaymentResponse> => {
-  const { patientAccount: account, patientId, encounterId, oystehrClient, stripeClient } = input;
-
-  const payments = await getPaymentsForPatient({
-    oystehrClient,
-    stripeClient,
-    account,
-    patientId,
-    encounterId,
-  });
-
-  return {
+  const response: ListPatientPaymentResponse = {
     patientId,
     payments,
     encounterId,
   };
-};
 
-const complexValidation = async (
-  input: ListPatientPaymentInput & { secrets: Secrets | null },
-  oystehrClient: Oystehr
-): Promise<EffectInput> => {
-  const { patientId, encounterId, secrets } = input;
-  const accountResources = await getAccountAndCoverageResourcesForPatient(patientId, oystehrClient);
-  const account: Account | undefined = accountResources.account;
-
-  if (!account?.id) {
-    throw FHIR_RESOURCE_NOT_FOUND('Account');
-  }
-
-  const stripeClient = getStripeClient(secrets);
-
-  const params: SearchParam[] = [];
-
-  if (encounterId) {
-    params.push({
-      name: 'request',
-      value: `Encounter/${encounterId}`,
-    });
-  } else {
-    params.push({
-      name: 'request.patient._id',
-      value: patientId,
-    });
-  }
-
-  return {
-    patientId,
-    encounterId,
-    stripeClient,
-    patientAccount: account,
-    oystehrClient,
-  };
-};
+  return lambdaResponse(200, response);
+});
 
 const validateRequestParameters = (input: ZambdaInput): ListPatientPaymentInput => {
   const authorization = input.headers.Authorization;

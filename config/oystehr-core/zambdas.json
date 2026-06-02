@@ -428,27 +428,6 @@
       "src": "src/rcm/payments/get-payment-locations/index",
       "zip": ".dist/zips/get-payment-locations.zip"
     },
-    "GET-STRIPE-ACCOUNT-INFO": {
-      "name": "get-stripe-account-info",
-      "type": "http_auth",
-      "runtime": "nodejs22.x",
-      "src": "src/rcm/payments/get-stripe-account-info/index",
-      "zip": ".dist/zips/get-stripe-account-info.zip"
-    },
-    "GET-TERMINAL-READERS": {
-      "name": "get-terminal-readers",
-      "type": "http_auth",
-      "runtime": "nodejs22.x",
-      "src": "src/rcm/payments/get-terminal-readers/index",
-      "zip": ".dist/zips/get-terminal-readers.zip"
-    },
-    "SAVE-TERMINAL-LOCATION": {
-      "name": "save-terminal-location",
-      "type": "http_auth",
-      "runtime": "nodejs22.x",
-      "src": "src/rcm/payments/save-terminal-location/index",
-      "zip": ".dist/zips/save-terminal-location.zip"
-    },
     "SYNC-USER": {
       "name": "sync-user",
       "type": "http_auth",
@@ -550,7 +529,7 @@
     "VISIT-DETAILS-TO-PDF": {
       "name": "visit-details-to-pdf",
       "type": "http_auth",
-      "runtime": "nodejs20.x",
+      "runtime": "nodejs22.x",
       "src": "src/ehr/visit-details/visit-details-to-pdf/index",
       "zip": ".dist/zips/visit-details-to-pdf.zip"
     },
@@ -693,34 +672,6 @@
       "runtime": "nodejs22.x",
       "src": "src/patient/get-appointment-details/index",
       "zip": ".dist/zips/get-appointment-details.zip"
-    },
-    "PAYMENT-METHODS-LIST": {
-      "name": "payment-methods-list",
-      "type": "http_auth",
-      "runtime": "nodejs22.x",
-      "src": "src/patient/payment-methods/list/index",
-      "zip": ".dist/zips/payment-methods-list.zip"
-    },
-    "PAYMENT-METHODS-DELETE": {
-      "name": "payment-methods-delete",
-      "type": "http_auth",
-      "runtime": "nodejs22.x",
-      "src": "src/patient/payment-methods/delete/index",
-      "zip": ".dist/zips/payment-methods-delete.zip"
-    },
-    "PAYMENT-METHODS-SETUP": {
-      "name": "payment-methods-setup",
-      "type": "http_auth",
-      "runtime": "nodejs22.x",
-      "src": "src/patient/payment-methods/setup/index",
-      "zip": ".dist/zips/payment-methods-setup.zip"
-    },
-    "PAYMENT-METHODS-SET-DEFAULT": {
-      "name": "payment-methods-set-default",
-      "type": "http_auth",
-      "runtime": "nodejs22.x",
-      "src": "src/patient/payment-methods/set-default/index",
-      "zip": ".dist/zips/payment-methods-set-default.zip"
     },
     "SEARCH-PLACES": {
       "name": "search-places",
@@ -949,13 +900,6 @@
       "src": "src/subscriptions/task/sub-harvest-paperwork/index",
       "zip": ".dist/zips/sub-harvest-paperwork-page.zip"
     },
-    "SUB-SEND-CLAIM": {
-      "name": "sub-send-claim",
-      "type": "subscription",
-      "runtime": "nodejs22.x",
-      "src": "src/subscriptions/task/sub-send-claim/index",
-      "zip": ".dist/zips/sub-send-claim.zip"
-    },
     "SUB-VISIT-NOTE-PDF-AND-EMAIL": {
       "name": "sub-visit-note-pdf-and-email",
       "type": "subscription",
@@ -1120,7 +1064,7 @@
     "RECOMMEND-BILLING-SUGGESTIONS": {
       "name": "recommend-billing-suggestions",
       "type": "http_auth",
-      "runtime": "nodejs20.x",
+      "runtime": "nodejs22.x",
       "src": "src/ehr/recommend-billing-suggestions/index",
       "zip": ".dist/zips/recommend-billing-suggestions.zip"
     },
@@ -1244,40 +1188,40 @@
       "src": "src/ehr/patient-payments/post/index",
       "zip": ".dist/zips/patient-payments-post.zip"
     },
-    "PATIENT-PAYMENTS-GET-CONFIG": {
-      "name": "patient-payments-terminal-get-config",
+    "PATIENT-PAYMENTS-REFUND": {
+      "name": "patient-payments-refund",
       "type": "http_auth",
       "runtime": "nodejs22.x",
-      "src": "src/ehr/patient-payments/terminal/get-config/index",
-      "zip": ".dist/zips/patient-payments-terminal-get-config.zip"
+      "src": "src/ehr/patient-payments/refund/index",
+      "zip": ".dist/zips/patient-payments-refund.zip"
     },
-    "PATIENT-PAYMENTS-CHECK-PAYMENT-STATUS": {
-      "name": "patient-payments-terminal-check-payment-status",
+    "PATIENT-PAYMENTS-TERMINAL-RH-GET-CONFIG": {
+      "name": "patient-payments-terminal-rh-get-config",
       "type": "http_auth",
       "runtime": "nodejs22.x",
-      "src": "src/ehr/patient-payments/terminal/check-payment-status/index",
-      "zip": ".dist/zips/patient-payments-terminal-check-payment-status.zip"
+      "src": "src/ehr/patient-payments/terminal/rh-get-config/index",
+      "zip": ".dist/zips/patient-payments-terminal-rh-get-config.zip"
     },
-    "PATIENT-PAYMENTS-CANCEL-READER-ACTION": {
-      "name": "patient-payments-terminal-cancel-reader-action",
+    "PATIENT-PAYMENTS-TERMINAL-RH-INITIATE-PAYMENT": {
+      "name": "patient-payments-terminal-rh-initiate-payment",
       "type": "http_auth",
       "runtime": "nodejs22.x",
-      "src": "src/ehr/patient-payments/terminal/cancel-reader-action/index",
-      "zip": ".dist/zips/patient-payments-terminal-cancel-reader-action.zip"
+      "src": "src/ehr/patient-payments/terminal/rh-initiate-payment/index",
+      "zip": ".dist/zips/patient-payments-terminal-rh-initiate-payment.zip"
     },
-    "PATIENT-PAYMENTS-INITIATE-PAYMENT": {
-      "name": "patient-payments-terminal-initiate-payment",
+    "PATIENT-PAYMENTS-TERMINAL-RH-CHECK-PAYMENT-STATUS": {
+      "name": "patient-payments-terminal-rh-check-payment-status",
       "type": "http_auth",
       "runtime": "nodejs22.x",
-      "src": "src/ehr/patient-payments/terminal/initiate-payment/index",
-      "zip": ".dist/zips/patient-payments-terminal-initiate-payment.zip"
+      "src": "src/ehr/patient-payments/terminal/rh-check-payment-status/index",
+      "zip": ".dist/zips/patient-payments-terminal-rh-check-payment-status.zip"
     },
-    "PATIENT-PAYMENTS-FINALIZE-PAYMENT": {
-      "name": "patient-payments-terminal-finalize-payment",
+    "PATIENT-PAYMENTS-TERMINAL-RH-CANCEL": {
+      "name": "patient-payments-terminal-rh-cancel",
       "type": "http_auth",
       "runtime": "nodejs22.x",
-      "src": "src/ehr/patient-payments/terminal/finalize-payment/index",
-      "zip": ".dist/zips/patient-payments-terminal-finalize-payment.zip"
+      "src": "src/ehr/patient-payments/terminal/rh-cancel/index",
+      "zip": ".dist/zips/patient-payments-terminal-rh-cancel.zip"
     },
     "FAILING-ENDPOINT": {
       "name": "failing-endpoint",
@@ -1439,13 +1383,6 @@
       "runtime": "nodejs22.x",
       "src": "src/ehr/tasks/create-manual-task/index",
       "zip": ".dist/zips/create-manual-task.zip"
-    },
-    "SUB-SEND-INVOICE-TO-PATIENT": {
-      "name": "sub-send-invoice-to-patient",
-      "type": "subscription",
-      "runtime": "nodejs22.x",
-      "src": "src/subscriptions/task/sub-send-invoice-to-patient/index",
-      "zip": ".dist/zips/sub-send-invoice-to-patient.zip"
     },
     "CREATE-INVOICES-TASKS": {
       "name": "create-invoices-tasks",
@@ -1837,6 +1774,41 @@
         "criteria": "Communication?category=https://terminology.fhir.oystehr.com/CodeSystem/notification|erx-notification",
         "reason": "Create Task for eRX notification"
       }
+    },
+    "FINIX-PAYMENT-METHODS-LIST": {
+      "name": "finix-payment-methods-list",
+      "type": "http_auth",
+      "runtime": "nodejs22.x",
+      "src": "src/patient/payment-methods/rh/list/index",
+      "zip": ".dist/zips/finix-payment-methods-list.zip"
+    },
+    "FINIX-PAYMENT-METHODS-DELETE": {
+      "name": "finix-payment-methods-delete",
+      "type": "http_auth",
+      "runtime": "nodejs22.x",
+      "src": "src/patient/payment-methods/rh/delete/index",
+      "zip": ".dist/zips/finix-payment-methods-delete.zip"
+    },
+    "FINIX-PAYMENT-METHODS-SETUP": {
+      "name": "finix-payment-methods-setup",
+      "type": "http_auth",
+      "runtime": "nodejs22.x",
+      "src": "src/patient/payment-methods/rh/setup/index",
+      "zip": ".dist/zips/finix-payment-methods-setup.zip"
+    },
+    "FINIX-PAYMENT-METHODS-SET-DEFAULT": {
+      "name": "finix-payment-methods-set-default",
+      "type": "http_auth",
+      "runtime": "nodejs22.x",
+      "src": "src/patient/payment-methods/rh/set-default/index",
+      "zip": ".dist/zips/finix-payment-methods-set-default.zip"
+    },
+    "FINIX-PAYMENT-METHODS-CONFIG": {
+      "name": "finix-payment-methods-config",
+      "type": "http_auth",
+      "runtime": "nodejs22.x",
+      "src": "src/patient/payment-methods/rh/config/index",
+      "zip": ".dist/zips/finix-payment-methods-config.zip"
     }
   },
   "fhirResources": {
@@ -1922,18 +1894,6 @@
             "valueString": "create"
           }
         ]
-      }
-    },
-    "SUB_SEND_CLAIM_SUBSCRIPTION": {
-      "resource": {
-        "resourceType": "Subscription",
-        "status": "active",
-        "reason": "send claim to clearing house",
-        "criteria": "Task?code=https://fhir.ottehr.com/CodeSystem/claim-sync|send-claim&status=requested",
-        "channel": {
-          "type": "rest-hook",
-          "endpoint": "zapehr-lambda:#{ref/zambdas/SUB-SEND-CLAIM/id}"
-        }
       }
     },
     "SUB_VISIT_NOTE_PDF_AND_EMAIL_SUBSCRIPTION": {

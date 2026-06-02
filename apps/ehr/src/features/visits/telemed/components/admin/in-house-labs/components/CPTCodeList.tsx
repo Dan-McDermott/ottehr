@@ -1,6 +1,5 @@
 import { Add, Close, ErrorOutline } from '@mui/icons-material';
 import { Autocomplete, Box, Button, Grid, IconButton, Paper, TextField, Theme } from '@mui/material';
-import { ProcedureModifier } from 'candidhealth/api';
 import { Coding } from 'fhir/r4b';
 import { ReactElement, useEffect, useMemo, useState } from 'react';
 import { Controller, useFieldArray, useFormContext } from 'react-hook-form';
@@ -70,7 +69,7 @@ function CPTCodeFormItem(props: CPTCodeFormItemProps): ReactElement {
   const { isFetching: isSearching, data } = useGetCPTHCPCSSearch({ search: debouncedSearchTerm, type: 'both' });
   const cptSearchOptions = useMemo(() => data?.codes || [], [data]);
 
-  const cptModifierOptions: ProcedureModifier[] = Object.values(ProcedureModifier);
+  const cptModifierOptions: string[] = [];
 
   const findFormValueInOptions = (value: string): Required<Pick<Coding, 'code' | 'display'>> | null =>
     cptSearchOptions.find((opt) => opt.code === value) || null;

@@ -29,6 +29,9 @@ export const dataTestIds = {
   wrInviteeName: 'wr-invitee-name',
   wrInviteeContact: 'wr-invitee-contact',
   cardNumber: 'card-number',
+  rhCardNumberInput: 'rh-card-number-input',
+  rhCardExpiryInput: 'rh-card-expiry-input',
+  rhCardCvcInput: 'rh-card-cvc-input',
   itemAddedValue: 'item-added-value',
   header: {
     authenticated: 'header-for-authenticated-user',

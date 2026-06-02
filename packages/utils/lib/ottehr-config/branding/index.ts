@@ -1,18 +1,18 @@
 import type { BrandingConfig, LogoConfig } from 'config-types';
 
 const BRANDING_DATA: BrandingConfig = {
-  projectName: 'Ottehr',
-  projectDomain: 'ottehr.com',
+  projectName: 'AfterOurs Urgent Care',
+  projectDomain: 'afteroursinc.com',
   email: {
     logoURL: '',
     palette: {
       deemphasizedText: '#00000061',
-      headerText: '#0F347C',
+      headerText: '#283555',
       bodyText: '#000000DE',
       footerText: '#212130',
-      buttonColor: '#295F75',
+      buttonColor: '#283555',
     },
-    sender: 'support@ottehr.com',
+    sender: 'appointments@mail.afteroursinc.com',
   },
   logo: {
     default: '',
@@ -20,13 +20,13 @@ const BRANDING_DATA: BrandingConfig = {
     pdf: '',
   },
   intake: {
-    primaryIconAlt: 'Ottehr icon',
+    primaryIconAlt: 'AfterOurs Urgent Care',
     welcomeTitleBreak: false,
-    primaryIconSize: 90,
+    primaryIconSize: 120,
     appBar: {
-      backgroundColor: '#0a2243',
-      logoHeight: '39px',
-      logoutButtonTextColor: '#FFFFFF',
+      backgroundColor: '#FFFFFF',
+      logoHeight: '44px',
+      logoutButtonTextColor: '#283555',
     },
   },
 };

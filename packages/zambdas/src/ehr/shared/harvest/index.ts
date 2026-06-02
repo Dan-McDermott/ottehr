@@ -5,7 +5,7 @@ import Oystehr, {
   BatchInputPutRequest,
   BatchInputRequest,
 } from '@oystehr/sdk';
-import { NetworkType } from 'candidhealth/api/resources/preEncounter/resources/coverages/resources/v1';
+type NetworkType = string;
 import { randomUUID } from 'crypto';
 import { Operation, RemoveOperation } from 'fast-json-patch';
 import {
@@ -38,7 +38,6 @@ import {
 } from 'fhir/r4b';
 import _ from 'lodash';
 import { DateTime } from 'luxon';
-import Stripe from 'stripe';
 import {
   ATTORNEY_FIRM_EXTENSION_URL,
   buildExtensionObject,
@@ -67,12 +66,10 @@ import {
   flattenIntakeQuestionnaireItems,
   flattenItems,
   formatPhoneNumber,
-  getAllStripeCustomerAccountPairs,
   getArrayInfo,
   getConsentAndRelatedDocRefsForAppointment,
   getConsentFormsForLocation,
   getCurrentValue,
-  getEmailForIndividual,
   getFullName,
   getMemberIdFromCoverage,
   getPatchOperationToAddOrUpdatePreferredLanguage,
@@ -4059,34 +4056,6 @@ export const updatePatientAccountFromQuestionnaire = async (
   } catch (error: unknown) {
     console.log(`Failed to update Account: ${JSON.stringify(error)}`);
     throw error;
-  }
-};
-
-interface UpdateStripeCustomerInput {
-  account: Account;
-  guarantorResource: RelatedPerson | Patient;
-  stripeClient: Stripe;
-}
-export const updateStripeCustomer = async (input: UpdateStripeCustomerInput): Promise<void> => {
-  const { guarantorResource, account, stripeClient } = input;
-  console.log('updating Stripe customer for account', account.id);
-  console.log('guarantor resource:', `${guarantorResource?.resourceType}/${guarantorResource?.id}`);
-
-  const email = getEmailForIndividual(guarantorResource);
-  const name = getFullName(guarantorResource);
-  const phone = getPhoneNumberForIndividual(guarantorResource);
-
-  const stripeCustomerAccountPairs = getAllStripeCustomerAccountPairs(account);
-  for (const pair of stripeCustomerAccountPairs) {
-    await stripeClient.customers.update(
-      pair.customerId,
-      {
-        email,
-        name,
-        phone,
-      },
-      { stripeAccount: pair.stripeAccount }
-    );
   }
 };
 

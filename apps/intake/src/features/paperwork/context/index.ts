@@ -3,10 +3,10 @@ import { QuestionnaireResponse, QuestionnaireResponseItem } from 'fhir/r4b';
 import { useOutletContext } from 'react-router-dom';
 import {
   AppointmentSummary,
-  CreditCardInfo,
+  FinixCreditCardInfo,
+  FinixListPaymentMethodsZambdaOutput,
   IntakeQuestionnaireItem,
   PaperworkPatient,
-  PaymentMethodSetupZambdaOutput,
   QuestionnaireFormFields,
   UCGetPaperworkResponse,
 } from 'utils';
@@ -20,23 +20,15 @@ export interface PaperworkContext
   appointment: AppointmentSummary | undefined;
   patient: PaperworkPatient | undefined;
   questionnaireResponse: QuestionnaireResponse | undefined;
-  cardsAreLoading: boolean;
-  paymentMethodStateInitializing: boolean;
-  paymentMethods: CreditCardInfo[];
-  stripeSetupData: PaymentMethodSetupZambdaOutput | undefined;
+  // Rectangle Health credit-card paperwork path.
+  rhPaymentMethods: FinixCreditCardInfo[];
+  rhCardsAreLoading: boolean;
+  rhPaymentMethodStateInitializing: boolean;
+  refetchRHPaymentMethods: (
+    options?: RefetchOptions | undefined
+  ) => Promise<QueryObserverResult<FinixListPaymentMethodsZambdaOutput, Error>>;
   setContinueLabel?: (label: string | undefined) => void;
   saveButtonDisabled?: boolean;
-  refetchPaymentMethods: (options?: RefetchOptions | undefined) => Promise<
-    QueryObserverResult<
-      {
-        cards: CreditCardInfo[];
-      },
-      Error
-    >
-  >;
-  refetchSetupData: (
-    options?: RefetchOptions | undefined
-  ) => Promise<QueryObserverResult<PaymentMethodSetupZambdaOutput, Error>>;
   setSaveButtonDisabled: (newVal: boolean) => void;
   findAnswerWithLinkId: (linkId: string) => QuestionnaireResponseItem | undefined;
 }

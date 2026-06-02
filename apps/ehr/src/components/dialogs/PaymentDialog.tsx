@@ -20,7 +20,7 @@ import {
 } from '@mui/material';
 import { Patient } from 'fhir/r4b';
 import { DateTime } from 'luxon';
-import { ReactElement, useEffect, useRef, useState } from 'react';
+import { ReactElement, useEffect } from 'react';
 import { Controller, useForm } from 'react-hook-form';
 import {
   CashOrCardPayment,
@@ -34,7 +34,6 @@ import {
 } from 'utils';
 import * as yup from 'yup';
 import { dataTestIds } from '../../constants/data-test-ids';
-import CardReaderTerminal, { CardReaderTerminalHandle } from '../CardReaderTerminal';
 import SelectCreditCard from '../SelectCreditCard';
 
 interface PaymentDialogProps {
@@ -45,7 +44,6 @@ interface PaymentDialogProps {
   patient: Patient;
   encounterId: string;
   appointmentId: string | undefined;
-  onTerminalPaymentSuccess?: () => Promise<void> | void;
 }
 
 const PatientHeader = (props: { patient: Patient }): ReactElement => {
@@ -99,11 +97,7 @@ const paymentSchema = yup.object().shape({
     .required('Payment method is required'),
   creditCard: yup.string().when('paymentMethod', {
     is: (val: string) => val === 'card',
-    then: (schema) =>
-      schema
-        .required('Credit card selection required')
-        .matches(RegExp('pm_[a-zA-Z0-9]{24,24}'), 'Credit card selection required')
-        .required(),
+    then: (schema) => schema.required('Credit card selection required'),
     otherwise: (schema) => schema.notRequired().nullable(),
   }),
 });
@@ -113,10 +107,8 @@ export default function ({
   handleClose,
   open,
   patient,
-  encounterId,
   appointmentId,
   isSubmitting,
-  onTerminalPaymentSuccess,
 }: PaymentDialogProps): ReactElement {
   const buttonSx = {
     fontWeight: 500,
@@ -146,47 +138,32 @@ export default function ({
 
   const paymentMethod = watch('paymentMethod'); // Default to 'card'
   const creditCard = watch('creditCard');
-  const [isTerminalConfigured, setIsTerminalConfigured] = useState(false);
-  const [isTerminalReaderConnected, setIsTerminalReaderConnected] = useState(false);
-  const [isTerminalPaymentSubmitting, setIsTerminalPaymentSubmitting] = useState(false);
-  const cardReaderTerminalRef = useRef<CardReaderTerminalHandle | null>(null);
 
-  const isConfiguredReaderPayment = paymentMethod === 'card-reader' && isTerminalConfigured;
-  const submitButtonLabel =
-    paymentMethod === 'card' || isConfiguredReaderPayment ? 'Process Payment' : 'Record Payment';
-  const shouldDisableSubmit = isConfiguredReaderPayment && !isTerminalReaderConnected;
+  const submitButtonLabel = paymentMethod === 'card' ? 'Process Payment' : 'Record Payment';
 
   const structureDataAndSubmit = async (data: any): Promise<void> => {
     const amount = parseFloat(data.amount);
     const selectedPaymentMethod = data.paymentMethod;
     const creditCard = data.creditCard;
+    const amountInCents = Math.round(amount * 100);
 
-    if (selectedPaymentMethod === 'card-reader' && isTerminalConfigured) {
-      if (!isTerminalReaderConnected || !cardReaderTerminalRef.current) {
-        return;
-      }
-
-      try {
-        setIsTerminalPaymentSubmitting(true);
-        await cardReaderTerminalRef.current.processPayment(Math.round(amount * 100));
-        await onTerminalPaymentSuccess?.();
-        handleClose();
-      } catch (error) {
-        console.error('Failed to process terminal payment', error);
-      } finally {
-        setIsTerminalPaymentSubmitting(false);
-      }
-      return;
+    let paymentData: CashOrCardPayment;
+    if (selectedPaymentMethod === 'card') {
+      // Charge a saved Finix card on file (Payment Instrument id from SelectCreditCard).
+      paymentData = {
+        paymentMethod: 'finix-card',
+        amountInCents,
+        paymentInstrumentId: creditCard || undefined,
+      };
+    } else {
+      // 'card-reader' becomes 'external-card-reader' (manual entry) until the
+      // Finix terminal flow is wired in; cash/check pass through unchanged.
+      const paymentMethod = selectedPaymentMethod === 'card-reader' ? 'external-card-reader' : selectedPaymentMethod;
+      paymentData = {
+        paymentMethod,
+        amountInCents,
+      };
     }
-
-    const paymentMethod =
-      selectedPaymentMethod === 'card-reader' && !isTerminalConfigured ? 'external-card-reader' : selectedPaymentMethod;
-
-    const paymentData: CashOrCardPayment = {
-      amountInCents: Math.round(amount * 100),
-      paymentMethod,
-      paymentMethodId: creditCard || undefined,
-    };
     await submitPayment(paymentData);
   };
 
@@ -280,27 +257,6 @@ export default function ({
                 error={formState.errors.creditCard?.message}
               />
             </Box>
-            {paymentMethod === 'card-reader' && (
-              <Box
-                sx={{
-                  display: 'initial',
-                }}
-              >
-                <CardReaderTerminal
-                  ref={cardReaderTerminalRef}
-                  patient={patient}
-                  appointmentId={appointmentId}
-                  selectedCardId={creditCard ?? ''}
-                  handleCardSelected={(newVal: string | undefined) => {
-                    setValue('creditCard', newVal ?? '');
-                  }}
-                  error={formState.errors.creditCard?.message}
-                  encounterId={encounterId}
-                  onTerminalConfiguredChange={setIsTerminalConfigured}
-                  onReaderConnectionChange={setIsTerminalReaderConnected}
-                />
-              </Box>
-            )}
           </Grid>
         </DialogContent>
         <DialogActions sx={{ justifyContent: 'space-between', marginLeft: 1 }}>
@@ -309,13 +265,12 @@ export default function ({
           </Button>
           <LoadingButton
             data-testid={dataTestIds.visitDetailsPage.cancelVisitDialogue}
-            loading={isSubmitting || isTerminalPaymentSubmitting}
+            loading={isSubmitting}
             type="submit"
             variant="contained"
             color="primary"
             size="medium"
             sx={buttonSx}
-            disabled={shouldDisableSubmit}
           >
             {submitButtonLabel}
           </LoadingButton>

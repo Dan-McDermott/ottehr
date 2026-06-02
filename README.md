@@ -34,6 +34,14 @@ Ottehr consists of three components:
 - **[Ottehr EHR](apps/ehr/)** &mdash; A staff-facing EHR for managing appointments and completing encounters, with features including checking appointments, managing patient queues, texting patients, updating a location's slots, setting a location's schedule, joining telemedicine calls, HPI and medical history, exam charting, eRx and assessment, patient plan, RCM and claims submission, and more.
 - **[Ottehr Backend](packages/zambdas)** &mdash; The backend for the Patient Portal and EHR apps, it is composed of Function-as-a-Service endpoints deployed as [Oystehr Zambdas](https://docs.oystehr.com/oystehr/services/zambda/).
 
+### Payments &mdash; Rectangle Health (CipherPay v3)
+
+Ottehr integrates with [Rectangle Health](https://www.rectanglehealth.com/) using the CipherPay v3 hosted payment widget for patient-facing card-on-file capture and charge processing. Payment methods and transaction records are stored as FHIR `PaymentNotice`/`PaymentReconciliation` resources keyed by Rectangle Health identifiers; no card data ever touches Ottehr or Oystehr. Configure RH credentials in your environment secrets (see `config/.env/local.template.json`).
+
+### Claims &mdash; External Temporal Workers
+
+Claims orchestration (eligibility checks, claim assembly, submission, ERA reconciliation) is handled by external [Temporal](https://temporal.io/) workers that operate against the Oystehr FHIR store. Ottehr itself does not embed claims-clearinghouse SDKs; the EHR exposes claims data through FHIR resources (`Claim`, `ClaimResponse`, `ExplanationOfBenefit`, `Coverage`) only. Worker deployment lives outside this repository.
+
 ## Run Ottehr Locally
 
 ### Prerequisites

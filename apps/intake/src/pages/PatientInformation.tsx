@@ -122,14 +122,10 @@ export const PatientInfoCollection: FC = () => {
       appointment: undefined,
       patient: undefined,
       updateTimestamp: undefined,
-      cardsAreLoading: false,
-      paymentMethods: [],
-      paymentMethodStateInitializing: false,
-      stripeSetupData: undefined,
-      refetchPaymentMethods: () => {
-        throw new Error('Function not implemented.');
-      },
-      refetchSetupData: () => {
+      rhPaymentMethods: [],
+      rhCardsAreLoading: false,
+      rhPaymentMethodStateInitializing: false,
+      refetchRHPaymentMethods: () => {
         throw new Error('Function not implemented.');
       },
     };

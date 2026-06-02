@@ -58,6 +58,17 @@ export const STATUS_TO_STYLE_MAP: Record<EligibilityCheckSimpleStatus, StatusSty
     bgColor: '#FECDD2',
     textColor: '#B71C1C',
   },
+  PENDING: {
+    bgColor: '#FFF3E0',
+    textColor: '#E65100',
+  },
+};
+
+const STATUS_LABEL_MAP: Record<EligibilityCheckSimpleStatus, string> = {
+  ELIGIBLE: 'ELIGIBLE',
+  'NOT ELIGIBLE': 'NOT ELIGIBLE',
+  UNKNOWN: 'UNKNOWN',
+  PENDING: 'CHECKING…',
 };
 
 function mapInitialStatus(
@@ -81,6 +92,8 @@ function mapSimpleStatusToDetailedStatus(simpleStatus: EligibilityCheckSimpleSta
       return InsuranceEligibilityCheckStatus.eligibilityConfirmed;
     case 'NOT ELIGIBLE':
       return InsuranceEligibilityCheckStatus.eligibilityNotConfirmed;
+    case 'PENDING':
+      return InsuranceEligibilityCheckStatus.eligibilityPending;
     case 'UNKNOWN':
     default:
       return InsuranceEligibilityCheckStatus.eligibilityNotChecked;
@@ -229,6 +242,7 @@ export const InsuranceContainer: FC<InsuranceContainerProps> = ({
 
       if (
         result &&
+        result.status !== 'PENDING' &&
         mapSimpleStatusToDetailedStatus(result.status) !== InsuranceEligibilityCheckStatus.eligibilityConfirmed
       ) {
         enqueueSnackbar(
@@ -260,8 +274,13 @@ export const InsuranceContainer: FC<InsuranceContainerProps> = ({
   };
 
   const TitleWidget = (): ReactElement => {
-    const chipColors = STATUS_TO_STYLE_MAP[eligibilityStatus?.status ?? 'UNKNOWN'];
+    const currentStatus = eligibilityStatus?.status ?? 'UNKNOWN';
+    const chipColors = STATUS_TO_STYLE_MAP[currentStatus];
+    const isPending = currentStatus === 'PENDING';
     const lastRefreshDateString = (() => {
+      if (isPending) {
+        return 'Checking eligibility…';
+      }
       const dateISO = eligibilityStatus?.dateISO ?? '';
       if (dateISO) {
         try {
@@ -279,7 +298,7 @@ export const InsuranceContainer: FC<InsuranceContainerProps> = ({
         {/* Status badge and View Details button in same row */}
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
           <Chip
-            label={eligibilityStatus?.status ?? 'UNKNOWN'}
+            label={STATUS_LABEL_MAP[currentStatus]}
             sx={{
               backgroundColor: chipColors.bgColor,
               color: chipColors.textColor,

@@ -2,8 +2,8 @@ import type { LocationConfig, SupportDialog } from 'config-types';
 
 const DEFAULT_SUPPORT_DIALOG_TITLE = 'Need help?';
 const DEFAULT_SUPPORT_DIALOG_EMERGENCY_NOTICE = 'If this is an emergency, please call 911.';
-const DEFAULT_SUPPORT_HOURS = 'Sunday-Saturday 10am-10pm ET.';
-const DEFAULT_SUPPORT_PHONE = '(202) 555-1212';
+const DEFAULT_SUPPORT_HOURS = 'Every day 8am-11pm MST.';
+const DEFAULT_SUPPORT_PHONE = '(303) 861-7878';
 
 type ResolvedSupportDialog = {
   title: string;

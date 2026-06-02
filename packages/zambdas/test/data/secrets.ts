@@ -3,7 +3,10 @@ import * as path from 'path';
 
 const env = process.env.ENV || 'local';
 const envFilePath = path.resolve(__dirname, '../../../../config/.env', `${env}.json`);
-const envConfig = JSON.parse(fs.readFileSync(envFilePath, 'utf8'));
+const templatePath = path.resolve(__dirname, '../../../../config/.env/local.template.json');
+const envConfig = fs.existsSync(envFilePath)
+  ? JSON.parse(fs.readFileSync(envFilePath, 'utf8'))
+  : JSON.parse(fs.readFileSync(templatePath, 'utf8'));
 
 export const SECRETS = {
   FHIR_API: envConfig.FHIR_API,

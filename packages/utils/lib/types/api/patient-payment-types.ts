@@ -4,9 +4,8 @@ export interface CardPaymentDTO {
   dateISO: string;
   fhirPaymentNotificationId: string;
   cardBrand?: string;
-  cardLast4?: string; // this can be undefined for a brief period while it is being processed, but we have all we need to render the payment in FHIR
-  stripePaymentMethodId: string | undefined; // this can be undefined for a brief period while it is being processed, but we have all we need to render the payment in FHIR
-  stripePaymentId: string | undefined; // this can be undefined for a brief period while it is being processed, but we have all we need to render the payment in FHIR
+  cardLast4?: string;
+  finixTransferId?: string;
   description?: string;
 }
 
@@ -116,10 +115,36 @@ interface CashPayment {
   description?: string;
 }
 
-export type CashOrCardPayment = CardPayment | CashPayment;
+// Finix card-not-present charges. Either the browser produced a single-use
+// `token` (one-time card via Finix.js Hosted Fields) or the EHR is reusing a
+// stored Finix Payment Instrument id (`paymentInstrumentId`, persisted on the
+// patient's Account as a saved card).
+interface FinixCardPayment {
+  paymentMethod: 'finix-card';
+  amountInCents: number;
+  token?: string;
+  paymentInstrumentId?: string;
+  description?: string;
+}
+
+export type CashOrCardPayment = CardPayment | CashPayment | FinixCardPayment;
 
 export interface PostPatientPaymentInput {
   patientId: string;
   encounterId: string;
   paymentDetails: CashOrCardPayment;
+}
+
+export interface RefundPatientPaymentInput {
+  patientId: string;
+  encounterId: string;
+  paymentNoticeId: string;
+  amountInCents: number;
+  reason?: string;
+}
+
+export interface RefundPatientPaymentResponse {
+  paymentNoticeId: string;
+  refundPaymentNoticeId: string;
+  transactionId: string;
 }

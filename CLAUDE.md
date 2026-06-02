@@ -139,6 +139,14 @@ Both apps are Vite + React + TypeScript + MUI. State management uses Zustand sto
 - `utils` is imported by both frontend apps and zambdas. It exports FHIR helpers, types, secrets utilities, and constants from `packages/utils/lib/main.ts`.
 - `ui-components` is imported by EHR and intake for shared MUI-based components.
 
+### Payments — Rectangle Health (CipherPay v3)
+
+Patient payments are processed by Rectangle Health's CipherPay v3 hosted widget. The widget is rendered via `apps/intake` and `apps/ehr` payment components; tokens and transaction references are persisted as FHIR `PaymentNotice`/`PaymentReconciliation` resources keyed by RH identifiers. Card data never touches Ottehr or Oystehr. RH credentials are loaded from environment secrets (see `config/.env/local.template.json`).
+
+### Claims — External Temporal Workers
+
+Claims orchestration (eligibility, claim assembly, submission, ERA posting) is handled by external Temporal workers that read and write FHIR resources (`Claim`, `ClaimResponse`, `ExplanationOfBenefit`, `Coverage`) directly against the Oystehr FHIR store. Ottehr exposes claims data through FHIR only — there are no clearinghouse SDKs embedded in this repo. Worker deployment is out of tree.
+
 ### IaC & Config
 
 Static Oystehr resource definitions live in `config/oystehr/` as JSON files validated by schema versions defined in `packages/spec/`. The `deploy/` directory contains Terraform scripts that consume these configs to provision environments. Schema version `2025-09-25` is current.

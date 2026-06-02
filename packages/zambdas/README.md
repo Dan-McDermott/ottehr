@@ -6,6 +6,16 @@ Backend endpoints for the urgent care application.
 
 Before you can run locally or deploy, you must copy in the env files from the [ottehr-secrets](https://github.com/masslight/ottehr-secrets) repository. These should be copied into [`.env/`](.env) (e.g. dev: [`.env/dev.json`](.env/dev.json)).
 
+For local development without ottehr-secrets access, copy [`config/.env/local.template.json`](../../config/.env/local.template.json) to `config/.env/local.json` and fill in the required values. The template enumerates every secret consumed by the local server.
+
+## Payments — Rectangle Health (CipherPay v3)
+
+Patient payments are processed by Rectangle Health's CipherPay v3 hosted widget. Zambdas in `src/patient/payment-methods/` and `src/ehr/patient-payments/` mediate token creation and persistence; transaction records live as FHIR `PaymentNotice`/`PaymentReconciliation` resources keyed by RH identifiers. Card data never touches Ottehr or Oystehr.
+
+## Claims — External Temporal Workers
+
+Claims orchestration (eligibility, claim assembly, submission, ERA posting) is handled by external Temporal workers operating directly against the Oystehr FHIR store. Zambdas in this package only expose claims data through FHIR resources (`Claim`, `ClaimResponse`, `ExplanationOfBenefit`, `Coverage`); they do not embed any clearinghouse SDK.
+
 ## Run Locally
 
 The backend is run locally using a [small Express server](/packages/zambdas/src/local-server/index.ts).

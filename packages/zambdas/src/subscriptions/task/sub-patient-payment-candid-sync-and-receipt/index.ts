@@ -1,17 +1,11 @@
 import Oystehr from '@oystehr/sdk';
 import { captureException } from '@sentry/aws-serverless';
 import { APIGatewayProxyResult } from 'aws-lambda';
-import { CandidApiClient } from 'candidhealth';
 import { Encounter, PaymentNotice } from 'fhir/r4b';
-import Stripe from 'stripe';
-import { createCandidApiClient, getStripeAccountForAppointmentOrEncounter } from 'utils';
 import {
   createOystehrClient,
   createPatientPaymentReceiptPdf,
   getAuth0Token,
-  getStripeClient,
-  performCandidPreEncounterSync,
-  STRIPE_PAYMENT_ID_SYSTEM,
   wrapHandler,
   ZambdaInput,
 } from '../../../shared';
@@ -20,7 +14,6 @@ import { validateRequestParameters } from '../validateRequestParameters';
 
 let oystehrToken: string;
 let oystehr: Oystehr;
-let candidApiClient: CandidApiClient | undefined;
 let taskId: string | undefined;
 
 const ZAMBDA_NAME = 'sub-patient-payment-candid-sync-and-receipt';
@@ -110,66 +103,18 @@ export const index = wrapHandler(ZAMBDA_NAME, async (input: ZambdaInput): Promis
         throw new Error(`No patient reference found on Encounter ${encounterId}`);
       }
 
-      // Get payment amount from PaymentNotice
-      const amountInCents = Math.round((paymentNotice.amount?.value || 0) * 100);
-
-      // Get Stripe payment intent if this was a card payment
-      let paymentIntent: Stripe.PaymentIntent | undefined;
-      const stripePaymentIntentId = paymentNotice.identifier?.find(
-        (identifier: { system?: string }) => identifier.system === STRIPE_PAYMENT_ID_SYSTEM
-      )?.value;
-      const stripeClient = getStripeClient(secrets);
-      const stripeAccountId = await getStripeAccountForAppointmentOrEncounter({ encounterId }, oystehr);
-
-      if (stripePaymentIntentId) {
-        try {
-          paymentIntent = await stripeClient.paymentIntents.retrieve(stripePaymentIntentId, {
-            stripeAccount: stripeAccountId,
-          });
-        } catch (error) {
-          console.error('Error fetching Stripe payment intent:', error);
-          captureException(error);
-          // Continue without payment intent - the PDF creation can handle missing Stripe data
-        }
-      }
-
-      // Track failures for both steps
-      let candidSyncFailed = false;
       let receiptPdfFailed = false;
       const errors: string[] = [];
-
-      // Perform Candid pre-encounter sync
-      try {
-        if (!candidApiClient) {
-          candidApiClient = createCandidApiClient(secrets);
-        }
-        console.time('Candid pre-encounter sync');
-        await performCandidPreEncounterSync({
-          encounterId,
-          oystehr,
-          candidApiClient,
-          amountCents: amountInCents,
-        });
-        console.timeEnd('Candid pre-encounter sync');
-      } catch (error) {
-        console.error(`Error during Candid pre-encounter sync: ${error}`);
-        captureException(error);
-        candidSyncFailed = true;
-        errors.push(`Candid sync failed: ${error}`);
-      }
 
       // Create patient payment receipt PDF
       try {
         console.time('receipt pdf creation');
         const receiptPdfInfo = await createPatientPaymentReceiptPdf({
           oystehr,
-          stripeClient,
           encounterId,
           patientId,
           secrets,
           oystehrToken,
-          stripeAccountId,
-          lastOperationPaymentIntent: paymentIntent,
         });
         console.timeEnd('receipt pdf creation');
         console.log('Receipt PDF created:', receiptPdfInfo);
@@ -180,17 +125,9 @@ export const index = wrapHandler(ZAMBDA_NAME, async (input: ZambdaInput): Promis
         errors.push(`Receipt PDF creation failed: ${error}`);
       }
 
-      // Update task status based on whether any step failed
       console.log('making patch request to update task status');
-      const anyStepFailed = candidSyncFailed || receiptPdfFailed;
-      const taskStatus = anyStepFailed ? 'failed' : 'completed';
-      let statusMessage: string;
-
-      if (anyStepFailed) {
-        statusMessage = errors.join('; ');
-      } else {
-        statusMessage = 'Candid sync and receipt PDF created successfully';
-      }
+      const taskStatus = receiptPdfFailed ? 'failed' : 'completed';
+      const statusMessage = receiptPdfFailed ? errors.join('; ') : 'Receipt PDF created successfully';
 
       const patchedTask = await patchTaskStatus(
         { task: { id: task.id }, taskStatusToUpdate: taskStatus, statusReasonToUpdate: statusMessage },

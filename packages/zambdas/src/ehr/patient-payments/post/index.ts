@@ -1,14 +1,10 @@
 import Oystehr from '@oystehr/sdk';
 import { APIGatewayProxyResult } from 'aws-lambda';
-import { Identifier, Money, PaymentNotice, PaymentReconciliation, Reference } from 'fhir/r4b';
+import { Identifier, Money, Patient, PaymentNotice, PaymentReconciliation, Reference } from 'fhir/r4b';
 import { DateTime } from 'luxon';
-import Stripe from 'stripe';
 import {
   FHIR_RESOURCE_NOT_FOUND,
-  GENERIC_STRIPE_PAYMENT_ERROR,
   getSecret,
-  getStripeAccountForAppointmentOrEncounter,
-  getStripeCustomerIdFromAccount,
   getTaskResource,
   INVALID_INPUT_ERROR,
   isValidUUID,
@@ -16,27 +12,28 @@ import {
   MISSING_REQUEST_BODY,
   MISSING_REQUIRED_PARAMETERS,
   NOT_AUTHORIZED,
-  parseStripeError,
   PAYMENT_METHOD_EXTENSION_URL,
   PostPatientPaymentInput,
   Secrets,
   SecretsKeys,
-  STRIPE_CUSTOMER_ID_NOT_FOUND_ERROR,
   TaskIndicator,
   TIMEZONES,
 } from 'utils';
+import { getBillingAccountForPatient } from '../../../patient/payment-methods/helpers';
+import { getOrCreateBuyerIdentityId } from '../../../patient/payment-methods/rh/helpers';
 import {
+  createFinixClient,
   createOystehrClient,
+  FinixTransfer,
   getAuth0Token,
-  getStripeClient,
+  getEntityForEncounter,
   getUser,
   lambdaResponse,
-  makeBusinessIdentifierForCandidPayment,
-  makeBusinessIdentifierForStripePayment,
+  makeBusinessIdentifierForFinixTransfer,
+  mapFinixTransferState,
   wrapHandler,
   ZambdaInput,
 } from '../../../shared';
-import { getAccountAndCoverageResourcesForPatient } from '../../shared/harvest';
 
 const ZAMBDA_NAME = 'post-patient-payment';
 
@@ -67,10 +64,7 @@ export const index = wrapHandler(ZAMBDA_NAME, async (input: ZambdaInput): Promis
     return lambdaResponse(400, { message: error.message });
   }
 
-  const requiredSecrets = validateEnvironmentParameters(
-    input,
-    validatedParameters.paymentDetails.paymentMethod === 'card'
-  );
+  const requiredSecrets = validateEnvironmentParameters(input);
   const { patientId, encounterId } = validatedParameters;
   console.groupEnd();
   console.debug('validateRequestParameters success');
@@ -84,29 +78,34 @@ export const index = wrapHandler(ZAMBDA_NAME, async (input: ZambdaInput): Promis
 
   const oystehrClient = createOystehrClient(oystehrM2MClientToken, secrets);
 
-  const effectInput: ComplexValidationOutput = await complexValidation(
-    {
-      ...validatedParameters,
-      ...requiredSecrets,
-      userProfile,
-    },
-    oystehrClient
-  );
+  const effectInput: EffectInput = {
+    ...validatedParameters,
+    ...requiredSecrets,
+    userProfile,
+  };
 
   const { notice } = await performEffect(effectInput, oystehrClient, requiredSecrets);
 
   return lambdaResponse(200, { notice, patientId, encounterId });
 });
 
+interface RequiredSecrets {
+  organizationId: string;
+  secrets: Secrets;
+}
+
+interface EffectInput extends PostPatientPaymentInput, RequiredSecrets {
+  userProfile: string;
+}
+
 const performEffect = async (
-  input: ComplexValidationOutput,
+  input: EffectInput,
   oystehrClient: Oystehr,
   requiredSecrets: RequiredSecrets
-): Promise<{ notice: PaymentNotice; paymentIntent?: Stripe.PaymentIntent }> => {
-  const { encounterId, patientId, paymentDetails, organizationId, userProfile, stripeAccount } = input;
+): Promise<{ notice: PaymentNotice }> => {
+  const { patientId, encounterId, paymentDetails, organizationId, userProfile } = input;
   const { paymentMethod, amountInCents, description } = paymentDetails;
   const dateTimeIso = DateTime.now().toISO() || '';
-  let paymentIntent: Stripe.Response<Stripe.PaymentIntent> | undefined;
   console.log('dateTimeIso', dateTimeIso);
   const paymentNoticeInput: PaymentNoticeInput = {
     encounterId,
@@ -116,40 +115,62 @@ const performEffect = async (
     recipientId: organizationId,
   };
 
-  if (input.cardInput && paymentMethod === 'card') {
-    const stripeClient = getStripeClient(requiredSecrets.secrets);
-    const customerId = input.cardInput.stripeCustomerId;
-    const paymentMethodId = paymentDetails.paymentMethodId;
-    const paymentIntentInput: Stripe.PaymentIntentCreateParams = {
-      amount: amountInCents,
-      currency: 'usd',
-      customer: customerId,
-      payment_method: paymentMethodId,
-      description: description || `Payment for encounter ${encounterId}`,
-      confirm: true,
-      metadata: {
-        oystehr_encounter_id: encounterId,
-        // added later. if it's undefined, add conditional check to get patient id from fhir
-        oystehr_patient_id: patientId,
-      },
-      automatic_payment_methods: {
-        enabled: true,
-        allow_redirects: 'never',
-      },
-    };
-    try {
-      paymentIntent = await stripeClient.paymentIntents.create(paymentIntentInput, {
-        stripeAccount, // Connected account ID if any
-      });
-    } catch (e) {
-      throw parseStripeError(e);
-    }
-    if (paymentIntent.status !== 'succeeded') {
-      throw GENERIC_STRIPE_PAYMENT_ERROR;
-    }
-    paymentNoticeInput.stripePaymentIntentId = paymentIntent.id;
+  if (paymentMethod === 'finix-card') {
+    const entity = await getEntityForEncounter(encounterId, oystehrClient);
+    const finixClient = createFinixClient(requiredSecrets.secrets, entity);
 
-    console.log('Payment Intent created:', JSON.stringify(paymentIntent, null, 2));
+    // Resolve the Payment Instrument to charge: either a saved card the EHR
+    // selected, or a one-time card just tokenized via Finix Hosted Fields,
+    // which we exchange for a Payment Instrument under the patient's buyer
+    // Identity before charging.
+    let paymentInstrumentId = paymentDetails.paymentInstrumentId;
+    if (!paymentInstrumentId) {
+      if (!paymentDetails.token) {
+        throw INVALID_INPUT_ERROR(
+          '"paymentDetails.token" or "paymentDetails.paymentInstrumentId" is required for finix-card payments.'
+        );
+      }
+      const account = await getBillingAccountForPatient(patientId, oystehrClient);
+      if (!account?.id) {
+        throw FHIR_RESOURCE_NOT_FOUND('Account');
+      }
+      const patient = await oystehrClient.fhir
+        .get<Patient>({ resourceType: 'Patient', id: patientId })
+        .catch(() => undefined);
+      const buyerIdentityId = await getOrCreateBuyerIdentityId({
+        account,
+        patient,
+        finixClient,
+        oystehr: oystehrClient,
+      });
+      const instrument = await finixClient.createPaymentInstrument({
+        token: paymentDetails.token,
+        identityId: buyerIdentityId,
+      });
+      if (!instrument.id) {
+        throw new Error('Finix did not return a payment_instrument id');
+      }
+      paymentInstrumentId = instrument.id;
+    }
+
+    const transfer: FinixTransfer = await finixClient.sale({
+      paymentInstrumentId,
+      amountInCents,
+      tags: { encounterId },
+    });
+    const status = mapFinixTransferState(transfer.state);
+    if (status !== 'approved') {
+      throw new Error(
+        `Finix sale not approved (state=${transfer.state ?? 'unknown'}): ${
+          transfer.failure_message ?? transfer.failure_code ?? 'no failure detail'
+        }`
+      );
+    }
+    if (!transfer.id) {
+      throw new Error('Finix sale completed without a transfer id');
+    }
+    paymentNoticeInput.finixTransferId = transfer.id;
+    console.log('Finix sale completed:', transfer.id);
   } else {
     console.log('handling non card payment:', paymentMethod, amountInCents, description);
     // here's where we might set a candidPayment id once candid stuff has been added
@@ -177,7 +198,7 @@ const performEffect = async (
   const taskCreationResult = await oystehrClient.fhir.create(paymentTaskResource);
   console.log('Task creation result:', taskCreationResult);
 
-  return { notice: paymentNotice, paymentIntent };
+  return { notice: paymentNotice };
 };
 
 const validateRequestParameters = (input: ZambdaInput): PostPatientPaymentInput => {
@@ -220,20 +241,27 @@ const validateRequestParameters = (input: ZambdaInput): PostPatientPaymentInput 
     throw INVALID_INPUT_ERROR('"encounterId" must be a valid UUID.');
   }
 
-  const { paymentMethod, amountInCents, paymentMethodId, description } = paymentDetails;
+  const { paymentMethod, amountInCents, description, token, paymentInstrumentId } = paymentDetails;
   if (
-    paymentMethod !== 'card' &&
     paymentMethod !== 'card-reader' &&
     paymentMethod !== 'external-card-reader' &&
     paymentMethod !== 'cash' &&
-    paymentMethod !== 'check'
+    paymentMethod !== 'check' &&
+    paymentMethod !== 'finix-card'
   ) {
     throw INVALID_INPUT_ERROR(
-      '"paymentDetails.paymentMethod" must be "card", "card-reader", "external-card-reader", "cash", or "check".'
+      '"paymentDetails.paymentMethod" must be "finix-card", "card-reader", "external-card-reader", "cash", or "check".'
     );
   }
-  if (paymentMethod === 'card' && !paymentMethodId) {
-    throw INVALID_INPUT_ERROR('"paymentDetails.paymentMethodId" is required for card payments.');
+  if (paymentMethod === 'finix-card' && !token && !paymentInstrumentId) {
+    throw INVALID_INPUT_ERROR(
+      '"paymentDetails.token" or "paymentDetails.paymentInstrumentId" is required for finix-card payments.'
+    );
+  }
+  if (paymentMethod === 'finix-card' && token && paymentInstrumentId) {
+    throw INVALID_INPUT_ERROR(
+      '"paymentDetails" cannot specify both "token" and "paymentInstrumentId" for finix-card payments.'
+    );
   }
   const verifiedAmount = parseInt(amountInCents);
   if (isNaN(verifiedAmount) || verifiedAmount <= 0) {
@@ -253,13 +281,7 @@ const validateRequestParameters = (input: ZambdaInput): PostPatientPaymentInput 
   };
 };
 
-interface RequiredSecrets {
-  organizationId: string;
-  stripeKey: string | null;
-  secrets: Secrets;
-}
-
-const validateEnvironmentParameters = (input: ZambdaInput, isCardPayment: boolean): RequiredSecrets => {
+const validateEnvironmentParameters = (input: ZambdaInput): RequiredSecrets => {
   const secrets = input.secrets;
   if (!secrets) {
     throw new Error('Secrets are required for this operation.');
@@ -272,73 +294,25 @@ const validateEnvironmentParameters = (input: ZambdaInput, isCardPayment: boolea
     );
   }
 
-  let stripeKey: string | null = null;
-
-  if (isCardPayment) {
-    try {
-      stripeKey = getSecret(SecretsKeys.STRIPE_SECRET_KEY, secrets);
-    } catch {
-      throw MISCONFIGURED_ENVIRONMENT_ERROR(
-        '"STRIPE_SECRET_KEY" environment variable was not set. Please ensure it is configured in project secrets.'
-      );
-    }
-  }
-
-  return { organizationId, stripeKey, secrets };
-};
-
-type ComplexValidationInput = PostPatientPaymentInput & RequiredSecrets & { userProfile: string };
-interface ComplexValidationOutput extends ComplexValidationInput {
-  cardInput?: {
-    stripeCustomerId: string;
-  };
-  stripeAccount?: string;
-}
-const complexValidation = async (input: ComplexValidationInput, oystehr: Oystehr): Promise<ComplexValidationOutput> => {
-  if (input.paymentDetails.paymentMethod === 'card') {
-    const patientAccount = await getAccountAndCoverageResourcesForPatient(input.patientId, oystehr);
-    if (!patientAccount.account) {
-      throw FHIR_RESOURCE_NOT_FOUND('Account');
-    }
-
-    const stripeAccount = await getStripeAccountForAppointmentOrEncounter({ encounterId: input.encounterId }, oystehr);
-
-    const stripeCustomerId = getStripeCustomerIdFromAccount(patientAccount.account, stripeAccount);
-    if (!stripeCustomerId) {
-      throw STRIPE_CUSTOMER_ID_NOT_FOUND_ERROR;
-    }
-    return { cardInput: { stripeCustomerId }, stripeAccount, ...input };
-  }
-  return { ...input };
+  return { organizationId, secrets };
 };
 
 interface PaymentNoticeInput extends Omit<PostPatientPaymentInput, 'patientId'> {
   submitterRef: Reference;
-  stripePaymentIntentId?: string;
-  candidPaymentId?: string;
+  finixTransferId?: string;
   recipientId: string;
   dateTimeIso: string;
 }
 
 const makePaymentNotice = (input: PaymentNoticeInput): PaymentNotice => {
-  const {
-    encounterId,
-    paymentDetails,
-    submitterRef,
-    stripePaymentIntentId,
-    candidPaymentId,
-    dateTimeIso,
-    recipientId,
-  } = input;
+  const { encounterId, paymentDetails, submitterRef, finixTransferId, dateTimeIso, recipientId } = input;
 
   const { paymentMethod, amountInCents } = paymentDetails;
 
   let identifier: Identifier | undefined;
 
-  if (paymentMethod === 'card' && stripePaymentIntentId) {
-    identifier = makeBusinessIdentifierForStripePayment(stripePaymentIntentId);
-  } else if (candidPaymentId) {
-    identifier = makeBusinessIdentifierForCandidPayment(candidPaymentId);
+  if (paymentMethod === 'finix-card' && finixTransferId) {
+    identifier = makeBusinessIdentifierForFinixTransfer(finixTransferId);
   }
 
   // the created timestamp is in UTC and the exact date in any timezone can always be derived from there
@@ -364,9 +338,7 @@ const makePaymentNotice = (input: PaymentNoticeInput): PaymentNotice => {
     status: 'active',
     created,
     disposition:
-      paymentMethod === 'card'
-        ? 'card payment intent created and confirmed with Stripe'
-        : `${paymentMethod} collected from patient`,
+      paymentMethod === 'finix-card' ? 'card payment processed by Finix' : `${paymentMethod} collected from patient`,
     outcome: 'complete',
     paymentDate,
     paymentAmount,
