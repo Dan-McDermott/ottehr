@@ -1,9 +1,9 @@
-import { isValidUUID, NOT_AUTHORIZED, RHPaymentMethodSetupParameters, Secrets } from 'utils';
+import { FinixPaymentMethodSetupParameters, isValidUUID, NOT_AUTHORIZED, Secrets } from 'utils';
 import { ZambdaInput } from '../../../../shared';
 
 export function validateRequestParameters(
   input: ZambdaInput
-): RHPaymentMethodSetupParameters & { secrets: Secrets | null; authorization: string } {
+): FinixPaymentMethodSetupParameters & { secrets: Secrets | null; authorization: string } {
   const authorization = input.headers.Authorization;
   if (!authorization) {
     throw NOT_AUTHORIZED;
@@ -12,7 +12,7 @@ export function validateRequestParameters(
     throw new Error('No request body provided');
   }
 
-  const { patientId, encryptedCardData, makeDefault } = JSON.parse(input.body);
+  const { patientId, token, makeDefault } = JSON.parse(input.body);
 
   if (!patientId) {
     throw new Error('patientId is not defined');
@@ -20,13 +20,13 @@ export function validateRequestParameters(
   if (!isValidUUID(patientId)) {
     throw new Error('patientId is not a valid UUID');
   }
-  if (!encryptedCardData || typeof encryptedCardData !== 'string') {
-    throw new Error('encryptedCardData is not defined or not a string');
+  if (!token || typeof token !== 'string') {
+    throw new Error('token is not defined or not a string');
   }
 
   return {
     patientId,
-    encryptedCardData,
+    token,
     makeDefault: makeDefault === true,
     secrets: input.secrets,
     authorization,

@@ -1,6 +1,7 @@
-export { RHCardManagement } from './components/RHCardManagement';
-export type { RHAddCardFormProps, RHCardManagementProps } from './components/RHCardManagement';
-export { RH_PAYMENT_METHODS_QUERY_KEY, useGetRHPaymentMethods } from './hooks/useGetRHPaymentMethods';
-export { useSetDefaultRHPaymentMethod } from './hooks/useSetDefaultRHPaymentMethod';
-export { useDeleteRHPaymentMethod } from './hooks/useDeleteRHPaymentMethod';
-export { useSetupRHPaymentMethod } from './hooks/useSetupRHPaymentMethod';
+export { FinixCardManagement } from './components/RHCardManagement';
+export type { FinixAddCardFormProps, FinixCardManagementProps } from './components/RHCardManagement';
+export { FINIX_PAYMENT_METHODS_QUERY_KEY, useGetFinixPaymentMethods } from './hooks/useGetRHPaymentMethods';
+export { useSetDefaultFinixPaymentMethod } from './hooks/useSetDefaultRHPaymentMethod';
+export { useDeleteFinixPaymentMethod } from './hooks/useDeleteRHPaymentMethod';
+export { useSetupFinixPaymentMethod } from './hooks/useSetupRHPaymentMethod';
+export { FINIX_PAYMENT_CONFIG_QUERY_KEY, useGetFinixPaymentConfig } from './hooks/useGetFinixPaymentConfig';

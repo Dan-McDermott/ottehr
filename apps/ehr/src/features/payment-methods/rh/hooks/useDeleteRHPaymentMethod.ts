@@ -1,25 +1,25 @@
 import { useMutation, UseMutationResult } from '@tanstack/react-query';
 import { useApiClients } from 'src/hooks/useAppClients';
 
-interface DeleteRHPaymentMethodParams {
+interface DeleteFinixPaymentMethodParams {
   paymentMethodId: string;
   onSuccess?: () => void;
   onError?: (error: unknown) => void;
 }
 
-export const useDeleteRHPaymentMethod = (
+export const useDeleteFinixPaymentMethod = (
   patientId: string | undefined
-): UseMutationResult<void, Error, DeleteRHPaymentMethodParams> => {
+): UseMutationResult<void, Error, DeleteFinixPaymentMethodParams> => {
   const { oystehrZambda: oystehr } = useApiClients();
 
   return useMutation({
-    mutationFn: async ({ paymentMethodId, onSuccess, onError }: DeleteRHPaymentMethodParams) => {
+    mutationFn: async ({ paymentMethodId, onSuccess, onError }: DeleteFinixPaymentMethodParams) => {
       if (!oystehr || !patientId) {
         throw new Error('api client not defined or patientId not provided');
       }
       try {
         await oystehr.zambda.execute({
-          id: 'rh-payment-methods-delete',
+          id: 'finix-payment-methods-delete',
           patientId,
           paymentMethodId,
         });

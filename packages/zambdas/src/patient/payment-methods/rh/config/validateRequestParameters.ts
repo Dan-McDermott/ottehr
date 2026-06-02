@@ -1,9 +1,9 @@
-import { FinixPaymentMethodListParameters, isValidUUID, NOT_AUTHORIZED, Secrets } from 'utils';
+import { FinixHostedFieldsConfigParameters, isValidUUID, NOT_AUTHORIZED, Secrets } from 'utils';
 import { ZambdaInput } from '../../../../shared';
 
 export function validateRequestParameters(
   input: ZambdaInput
-): FinixPaymentMethodListParameters & { secrets: Secrets | null; authorization: string } {
+): FinixHostedFieldsConfigParameters & { secrets: Secrets | null; authorization: string } {
   const authorization = input.headers.Authorization;
   if (!authorization) {
     throw NOT_AUTHORIZED;

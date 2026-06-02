@@ -1,51 +1,63 @@
 // ---------------------------------------------------------------------------
-// Rectangle Health (v3) Card-on-File payment-method zambda contracts
+// Finix Card-on-File payment-method zambda contracts
 // ---------------------------------------------------------------------------
-// The RH v3 CoF flow encrypts cards client-side and stores an opaque
-// payment_token, then exposes list / set-default / delete operations against
-// the resulting Card-on-File records.
+// The Finix flow tokenizes cards client-side via Hosted Fields (producing a
+// single-use `token`), which the backend exchanges for a reusable Payment
+// Instrument stored as a saved card, then exposes list / set-default / delete
+// operations against the resulting records.
 
-export interface RHPaymentMethodSetupParameters {
+export interface FinixPaymentMethodSetupParameters {
   patientId: string;
-  encryptedCardData: string;
+  token: string;
   makeDefault?: boolean;
 }
 
-export interface RHPaymentMethodSetupZambdaOutput {
+export interface FinixPaymentMethodSetupZambdaOutput {
   paymentMethodId: string;
   default: boolean;
   last4?: string;
   brand?: string;
 }
 
-export interface RHPaymentMethodListParameters {
+export interface FinixPaymentMethodListParameters {
   patientId: string;
 }
 
-export interface RHCreditCardInfo {
+export interface FinixCreditCardInfo {
   id: string;
   default: boolean;
   last4?: string;
   brand?: string;
 }
 
-export interface RHListPaymentMethodsZambdaOutput {
-  cards: RHCreditCardInfo[];
+export interface FinixListPaymentMethodsZambdaOutput {
+  cards: FinixCreditCardInfo[];
 }
 
-export interface RHPaymentMethodSetDefaultParameters {
+export interface FinixPaymentMethodSetDefaultParameters {
   patientId: string;
   paymentMethodId: string;
 }
 
-export type RHPaymentMethodSetDefaultZambdaOutput = Record<string, never>;
+export type FinixPaymentMethodSetDefaultZambdaOutput = Record<string, never>;
 
-export interface RHPaymentMethodDeleteParameters {
+export interface FinixPaymentMethodDeleteParameters {
   patientId: string;
   paymentMethodId: string;
 }
 
-export type RHPaymentMethodDeleteZambdaOutput = Record<string, never>;
+export type FinixPaymentMethodDeleteZambdaOutput = Record<string, never>;
+
+// Lightweight config the browser needs to mount Finix.js Hosted Fields for a
+// patient's clinic entity. Neither value is secret.
+export interface FinixHostedFieldsConfigParameters {
+  patientId: string;
+}
+
+export interface FinixHostedFieldsConfigZambdaOutput {
+  environment: 'sandbox' | 'prod';
+  applicationId: string;
+}
 
 export interface GetPatientBalancesZambdaInput {
   patientId: string;

@@ -1,24 +1,22 @@
 import { Encounter, Location, Organization, Patient } from 'fhir/r4b';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+  FINIX_MERCHANT_ENTITY_SYSTEM,
+  getEntityCodeForOrganization,
   getEntityForLocation,
   getEntityForOrganization,
   getEntityForPatient,
-  getMacForOrganization,
   PatientEntityUnresolvableError,
-  RH_MAC_AFTEROURS,
-  RH_MAC_SPIRE,
-  RH_MERCHANT_ACCOUNT_CODE_SYSTEM,
 } from './payments';
 
-const orgWithMac = (id: string, mac: string): Organization => ({
+const orgWithEntity = (id: string, entity: string): Organization => ({
   resourceType: 'Organization',
   id,
   name: id,
-  identifier: [{ system: RH_MERCHANT_ACCOUNT_CODE_SYSTEM, value: mac }],
+  identifier: [{ system: FINIX_MERCHANT_ENTITY_SYSTEM, value: entity }],
 });
 
-const orgWithoutMac = (id: string): Organization => ({
+const orgWithoutEntity = (id: string): Organization => ({
   resourceType: 'Organization',
   id,
   name: id,
@@ -43,18 +41,18 @@ const makeOystehr = (
   return { oystehr: { fhir: { search: searchMock, get: getMock } }, getMock, searchMock };
 };
 
-describe('getMacForOrganization', () => {
-  it('returns the MAC value when an identifier with the RH system is present', () => {
-    expect(getMacForOrganization(orgWithMac('o1', RH_MAC_AFTEROURS))).toBe(RH_MAC_AFTEROURS);
+describe('getEntityCodeForOrganization', () => {
+  it('returns the entity slug when an identifier with the Finix system is present', () => {
+    expect(getEntityCodeForOrganization(orgWithEntity('o1', 'afterours'))).toBe('afterours');
   });
 
-  it('returns undefined when no RH-system identifier is present', () => {
-    expect(getMacForOrganization(orgWithoutMac('o1'))).toBeUndefined();
+  it('returns undefined when no Finix-system identifier is present', () => {
+    expect(getEntityCodeForOrganization(orgWithoutEntity('o1'))).toBeUndefined();
   });
 
   it('returns undefined when only an unrelated identifier system is present', () => {
     expect(
-      getMacForOrganization({
+      getEntityCodeForOrganization({
         resourceType: 'Organization',
         id: 'o1',
         identifier: [{ system: 'https://example.com/other', value: 'X' }],
@@ -64,20 +62,20 @@ describe('getMacForOrganization', () => {
 });
 
 describe('getEntityForOrganization', () => {
-  it('maps the AfterOurs MAC to "afterours"', () => {
-    expect(getEntityForOrganization(orgWithMac('o1', RH_MAC_AFTEROURS))).toBe('afterours');
+  it('maps the "afterours" slug to "afterours"', () => {
+    expect(getEntityForOrganization(orgWithEntity('o1', 'afterours'))).toBe('afterours');
   });
 
-  it('maps the Spire MAC to "spire"', () => {
-    expect(getEntityForOrganization(orgWithMac('o2', RH_MAC_SPIRE))).toBe('spire');
+  it('maps the "spire" slug to "spire"', () => {
+    expect(getEntityForOrganization(orgWithEntity('o2', 'spire'))).toBe('spire');
   });
 
-  it('returns undefined for an unknown MAC', () => {
-    expect(getEntityForOrganization(orgWithMac('o3', '99999999'))).toBeUndefined();
+  it('returns undefined for an unknown slug', () => {
+    expect(getEntityForOrganization(orgWithEntity('o3', 'someone-else'))).toBeUndefined();
   });
 
-  it('returns undefined when no MAC identifier is present', () => {
-    expect(getEntityForOrganization(orgWithoutMac('o4'))).toBeUndefined();
+  it('returns undefined when no entity identifier is present', () => {
+    expect(getEntityForOrganization(orgWithoutEntity('o4'))).toBeUndefined();
   });
 });
 
@@ -87,7 +85,7 @@ describe('getEntityForLocation', () => {
   it('resolves entity via managingOrganization', async () => {
     const { oystehr, getMock } = makeOystehr(
       () => makeBundle([]),
-      ({ id }) => orgWithMac(id, RH_MAC_AFTEROURS)
+      ({ id }) => orgWithEntity(id, 'afterours')
     );
     expect(await getEntityForLocation(locationWithOrg('loc1', 'org-ao'), oystehr as never)).toBe('afterours');
     expect(getMock).toHaveBeenCalledWith({ resourceType: 'Organization', id: 'org-ao' });
@@ -103,13 +101,13 @@ describe('getEntityForLocation', () => {
     );
   });
 
-  it('throws when the managingOrganization is missing the MAC identifier', async () => {
+  it('throws when the managingOrganization is missing the entity identifier', async () => {
     const { oystehr } = makeOystehr(
       () => makeBundle([]),
-      ({ id }) => orgWithoutMac(id)
+      ({ id }) => orgWithoutEntity(id)
     );
     await expect(getEntityForLocation(locationWithOrg('loc1', 'org-x'), oystehr as never)).rejects.toThrow(
-      /no MAC identifier/
+      /no entity identifier/
     );
   });
 });
@@ -129,7 +127,7 @@ describe('getEntityForPatient', () => {
     const location = locationWithOrg('loc-ao', 'org-ao');
     const { oystehr, searchMock, getMock } = makeOystehr(
       () => makeBundle([encounter, location]),
-      ({ id }) => orgWithMac(id, RH_MAC_AFTEROURS)
+      ({ id }) => orgWithEntity(id, 'afterours')
     );
     const patient: Patient = { resourceType: 'Patient', id: 'pat1' };
     expect(await getEntityForPatient(patient, oystehr as never)).toBe('afterours');
@@ -140,7 +138,7 @@ describe('getEntityForPatient', () => {
   it('falls back to managingOrganization when no Encounter has a Location', async () => {
     const { oystehr } = makeOystehr(
       () => makeBundle([]),
-      ({ id }) => orgWithMac(id, RH_MAC_SPIRE)
+      ({ id }) => orgWithEntity(id, 'spire')
     );
     const patient: Patient = {
       resourceType: 'Patient',
@@ -157,7 +155,7 @@ describe('getEntityForPatient — additional scenarios', () => {
   it('falls back to generalPractitioner Organization when no Encounter and no managingOrganization', async () => {
     const { oystehr } = makeOystehr(
       () => makeBundle([]),
-      ({ id }) => orgWithMac(id, RH_MAC_AFTEROURS)
+      ({ id }) => orgWithEntity(id, 'afterours')
     );
     const patient: Patient = {
       resourceType: 'Patient',
@@ -176,10 +174,10 @@ describe('getEntityForPatient — additional scenarios', () => {
     await expect(getEntityForPatient(patient, oystehr as never)).rejects.toBeInstanceOf(PatientEntityUnresolvableError);
   });
 
-  it('throws PatientEntityUnresolvableError when candidates exist but none carry a MAC', async () => {
+  it('throws PatientEntityUnresolvableError when candidates exist but none carry an entity slug', async () => {
     const { oystehr } = makeOystehr(
       () => makeBundle([]),
-      ({ id }) => orgWithoutMac(id)
+      ({ id }) => orgWithoutEntity(id)
     );
     const patient: Patient = {
       resourceType: 'Patient',
@@ -200,8 +198,8 @@ describe('getEntityForPatient — additional scenarios', () => {
     };
     const location = locationWithOrg('loc-spire', 'org-spire');
     const orgs: Record<string, Organization> = {
-      'org-spire': orgWithMac('org-spire', RH_MAC_SPIRE),
-      'org-ao': orgWithMac('org-ao', RH_MAC_AFTEROURS),
+      'org-spire': orgWithEntity('org-spire', 'spire'),
+      'org-ao': orgWithEntity('org-ao', 'afterours'),
     };
     const { oystehr } = makeOystehr(
       () => makeBundle([encounter, location]),

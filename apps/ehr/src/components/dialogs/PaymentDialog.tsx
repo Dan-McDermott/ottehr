@@ -145,16 +145,25 @@ export default function ({
     const amount = parseFloat(data.amount);
     const selectedPaymentMethod = data.paymentMethod;
     const creditCard = data.creditCard;
+    const amountInCents = Math.round(amount * 100);
 
-    // 'card-reader' becomes 'external-card-reader' (manual entry) until the
-    // RH terminal UI replacement is wired in.
-    const paymentMethod = selectedPaymentMethod === 'card-reader' ? 'external-card-reader' : selectedPaymentMethod;
-
-    const paymentData: CashOrCardPayment = {
-      amountInCents: Math.round(amount * 100),
-      paymentMethod,
-      paymentMethodId: creditCard || undefined,
-    };
+    let paymentData: CashOrCardPayment;
+    if (selectedPaymentMethod === 'card') {
+      // Charge a saved Finix card on file (Payment Instrument id from SelectCreditCard).
+      paymentData = {
+        paymentMethod: 'finix-card',
+        amountInCents,
+        paymentInstrumentId: creditCard || undefined,
+      };
+    } else {
+      // 'card-reader' becomes 'external-card-reader' (manual entry) until the
+      // Finix terminal flow is wired in; cash/check pass through unchanged.
+      const paymentMethod = selectedPaymentMethod === 'card-reader' ? 'external-card-reader' : selectedPaymentMethod;
+      paymentData = {
+        paymentMethod,
+        amountInCents,
+      };
+    }
     await submitPayment(paymentData);
   };
 

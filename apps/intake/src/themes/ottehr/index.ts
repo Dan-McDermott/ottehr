@@ -1,5 +1,5 @@
 export * from './icons';
-export { default as ottehrLogo } from './ottehrIntake.png';
+export { default as ottehrLogo } from './icons/ottehr-light-blue.svg';
 export { default as ottehrAiLogo } from './ottehr-ai.svg';
 
 export {};

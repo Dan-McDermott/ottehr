@@ -1,37 +1,37 @@
 import { useMutation, UseMutationResult } from '@tanstack/react-query';
 import { useApiClients } from 'src/hooks/useAppClients';
-import { chooseJson, RHPaymentMethodSetupZambdaOutput } from 'utils';
+import { chooseJson, FinixPaymentMethodSetupZambdaOutput } from 'utils';
 
-interface SetupRHPaymentMethodParams {
-  encryptedCardData: string;
+interface SetupFinixPaymentMethodParams {
+  token: string;
   makeDefault?: boolean;
-  onSuccess?: (data: RHPaymentMethodSetupZambdaOutput) => void;
+  onSuccess?: (data: FinixPaymentMethodSetupZambdaOutput) => void;
   onError?: (error: unknown) => void;
 }
 
-export const useSetupRHPaymentMethod = (
+export const useSetupFinixPaymentMethod = (
   patientId: string | undefined
-): UseMutationResult<RHPaymentMethodSetupZambdaOutput, Error, SetupRHPaymentMethodParams> => {
+): UseMutationResult<FinixPaymentMethodSetupZambdaOutput, Error, SetupFinixPaymentMethodParams> => {
   const { oystehrZambda: oystehr } = useApiClients();
 
   return useMutation({
     mutationFn: async ({
-      encryptedCardData,
+      token,
       makeDefault,
       onSuccess,
       onError,
-    }: SetupRHPaymentMethodParams): Promise<RHPaymentMethodSetupZambdaOutput> => {
+    }: SetupFinixPaymentMethodParams): Promise<FinixPaymentMethodSetupZambdaOutput> => {
       if (!oystehr || !patientId) {
         throw new Error('api client not defined or patientId not provided');
       }
       try {
         const result = await oystehr.zambda.execute({
-          id: 'rh-payment-methods-setup',
+          id: 'finix-payment-methods-setup',
           patientId,
-          encryptedCardData,
+          token,
           makeDefault: makeDefault === true,
         });
-        const parsed = chooseJson<RHPaymentMethodSetupZambdaOutput>(result);
+        const parsed = chooseJson<FinixPaymentMethodSetupZambdaOutput>(result);
         onSuccess?.(parsed);
         return parsed;
       } catch (error) {

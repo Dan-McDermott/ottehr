@@ -231,7 +231,7 @@ export default function PatientPaymentList({
     queryFn: async () => {
       if (!oystehrZambda || !patient?.id) return false;
       const result = await oystehrZambda.zambda.execute({
-        id: 'rh-payment-methods-list',
+        id: 'finix-payment-methods-list',
         patientId: patient.id,
       });
       return deriveCardOnFileStatus(result.output);

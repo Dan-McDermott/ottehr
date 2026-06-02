@@ -2,45 +2,50 @@ import Oystehr from '@oystehr/sdk';
 import { Encounter, Location, Organization, Patient, Reference } from 'fhir/r4b';
 
 // ---------------------------------------------------------------------------
-// Rectangle Health — merchant routing (Organization → MAC → entity)
+// Finix — merchant routing (Organization → entity)
 // ---------------------------------------------------------------------------
 //
 // Topology (locked):
-//   AfterOurs, Inc.       → MAC 78072001 → 4 urgent-care clinics
-//   Spire Health Pathways → MAC 78072002 → 1 functional-medicine clinic
+//   AfterOurs, Inc.       → entity "afterours" → 4 urgent-care clinics
+//   Spire Health Pathways → entity "spire"     → 1 functional-medicine clinic
 //
 // Each legal-entity Organization carries a single Identifier with the system
-// below; each clinic Location's `managingOrganization` references its parent.
+// below whose value is the stable, environment-independent entity slug; each
+// clinic Location's `managingOrganization` references its parent. The slug then
+// maps to the per-entity Finix Application/Merchant secrets (see finix.ts).
+//
+// The slug is deliberately NOT the Finix Merchant ID: Merchant IDs differ
+// between Sandbox and Live, so storing the slug keeps FHIR data portable across
+// environments.
 
-export type RHClinicEntity = 'afterours' | 'spire';
+export type ClinicEntity = 'afterours' | 'spire';
 
-export const RH_MERCHANT_ACCOUNT_CODE_SYSTEM =
-  'https://fhir.oystehr.com/PaymentIdSystem/rectangle-health/merchant-account-code';
+export const CLINIC_ENTITIES: ClinicEntity[] = ['afterours', 'spire'];
 
-export const RH_MAC_AFTEROURS = '78072001';
-export const RH_MAC_SPIRE = '78072002';
+export const isClinicEntity = (value: string | undefined): value is ClinicEntity =>
+  value === 'afterours' || value === 'spire';
+
+export const FINIX_MERCHANT_ENTITY_SYSTEM = 'https://fhir.oystehr.com/PaymentIdSystem/finix/merchant-entity';
 
 export class PatientEntityUnresolvableError extends Error {
   patientId: string | undefined;
   reason: string;
 
   constructor(patientId: string | undefined, reason: string) {
-    super(`Cannot resolve Rectangle Health entity for Patient/${patientId ?? '<unknown>'}: ${reason}`);
+    super(`Cannot resolve Finix entity for Patient/${patientId ?? '<unknown>'}: ${reason}`);
     this.name = 'PatientEntityUnresolvableError';
     this.patientId = patientId;
     this.reason = reason;
   }
 }
 
-export const getMacForOrganization = (org: Organization): string | undefined => {
-  return org.identifier?.find((ident) => ident.system === RH_MERCHANT_ACCOUNT_CODE_SYSTEM)?.value;
+export const getEntityCodeForOrganization = (org: Organization): string | undefined => {
+  return org.identifier?.find((ident) => ident.system === FINIX_MERCHANT_ENTITY_SYSTEM)?.value;
 };
 
-export const getEntityForOrganization = (org: Organization): RHClinicEntity | undefined => {
-  const mac = getMacForOrganization(org);
-  if (mac === RH_MAC_AFTEROURS) return 'afterours';
-  if (mac === RH_MAC_SPIRE) return 'spire';
-  return undefined;
+export const getEntityForOrganization = (org: Organization): ClinicEntity | undefined => {
+  const code = getEntityCodeForOrganization(org);
+  return isClinicEntity(code) ? code : undefined;
 };
 
 const referenceId = (ref: Reference | undefined, expectedType: string): string | undefined => {
@@ -59,17 +64,15 @@ const fetchOrganization = async (id: string, oystehr: Oystehr): Promise<Organiza
   }
 };
 
-export const getEntityForLocation = async (loc: Location, oystehr: Oystehr): Promise<RHClinicEntity> => {
+export const getEntityForLocation = async (loc: Location, oystehr: Oystehr): Promise<ClinicEntity> => {
   const orgId = referenceId(loc.managingOrganization, 'Organization');
   if (!orgId) {
-    throw new Error(
-      `Cannot resolve Rectangle Health entity for Location/${loc.id ?? '<unknown>'}: missing managingOrganization`
-    );
+    throw new Error(`Cannot resolve Finix entity for Location/${loc.id ?? '<unknown>'}: missing managingOrganization`);
   }
   const org = await fetchOrganization(orgId, oystehr);
   if (!org) {
     throw new Error(
-      `Cannot resolve Rectangle Health entity for Location/${
+      `Cannot resolve Finix entity for Location/${
         loc.id ?? '<unknown>'
       }: managingOrganization Organization/${orgId} not found`
     );
@@ -77,9 +80,9 @@ export const getEntityForLocation = async (loc: Location, oystehr: Oystehr): Pro
   const entity = getEntityForOrganization(org);
   if (!entity) {
     throw new Error(
-      `Cannot resolve Rectangle Health entity for Location/${
+      `Cannot resolve Finix entity for Location/${
         loc.id ?? '<unknown>'
-      }: managingOrganization Organization/${orgId} has no MAC identifier (system=${RH_MERCHANT_ACCOUNT_CODE_SYSTEM})`
+      }: managingOrganization Organization/${orgId} has no entity identifier (system=${FINIX_MERCHANT_ENTITY_SYSTEM})`
     );
   }
   return entity;
@@ -105,7 +108,7 @@ const findRecentEncounterLocationOrgId = async (patientId: string, oystehr: Oyst
   return referenceId(location?.managingOrganization, 'Organization');
 };
 
-export const getEntityForPatient = async (pat: Patient, oystehr: Oystehr): Promise<RHClinicEntity> => {
+export const getEntityForPatient = async (pat: Patient, oystehr: Oystehr): Promise<ClinicEntity> => {
   const candidates: string[] = [];
 
   if (pat.id) {
@@ -139,6 +142,6 @@ export const getEntityForPatient = async (pat: Patient, oystehr: Oystehr): Promi
     pat.id,
     `none of the candidate Organizations [${candidates.join(
       ', '
-    )}] carry a MAC identifier (system=${RH_MERCHANT_ACCOUNT_CODE_SYSTEM})`
+    )}] carry an entity identifier (system=${FINIX_MERCHANT_ENTITY_SYSTEM})`
   );
 };

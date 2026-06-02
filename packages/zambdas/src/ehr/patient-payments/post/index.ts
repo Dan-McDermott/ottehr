@@ -1,8 +1,9 @@
 import Oystehr from '@oystehr/sdk';
 import { APIGatewayProxyResult } from 'aws-lambda';
-import { Identifier, Money, PaymentNotice, PaymentReconciliation, Reference } from 'fhir/r4b';
+import { Identifier, Money, Patient, PaymentNotice, PaymentReconciliation, Reference } from 'fhir/r4b';
 import { DateTime } from 'luxon';
 import {
+  FHIR_RESOURCE_NOT_FOUND,
   getSecret,
   getTaskResource,
   INVALID_INPUT_ERROR,
@@ -18,15 +19,18 @@ import {
   TaskIndicator,
   TIMEZONES,
 } from 'utils';
+import { getBillingAccountForPatient } from '../../../patient/payment-methods/helpers';
+import { getOrCreateBuyerIdentityId } from '../../../patient/payment-methods/rh/helpers';
 import {
+  createFinixClient,
   createOystehrClient,
-  createRectangleHealthClient,
+  FinixTransfer,
   getAuth0Token,
   getEntityForEncounter,
   getUser,
   lambdaResponse,
-  makeBusinessIdentifierForRectangleHealthPayment,
-  RectangleHealthSaleResponse,
+  makeBusinessIdentifierForFinixTransfer,
+  mapFinixTransferState,
   wrapHandler,
   ZambdaInput,
 } from '../../../shared';
@@ -99,7 +103,7 @@ const performEffect = async (
   oystehrClient: Oystehr,
   requiredSecrets: RequiredSecrets
 ): Promise<{ notice: PaymentNotice }> => {
-  const { encounterId, paymentDetails, organizationId, userProfile } = input;
+  const { patientId, encounterId, paymentDetails, organizationId, userProfile } = input;
   const { paymentMethod, amountInCents, description } = paymentDetails;
   const dateTimeIso = DateTime.now().toISO() || '';
   console.log('dateTimeIso', dateTimeIso);
@@ -111,34 +115,62 @@ const performEffect = async (
     recipientId: organizationId,
   };
 
-  if (paymentMethod === 'rh-card') {
+  if (paymentMethod === 'finix-card') {
     const entity = await getEntityForEncounter(encounterId, oystehrClient);
-    const rhClient = createRectangleHealthClient(requiredSecrets.secrets, entity);
-    const amountDecimal = (amountInCents / 100).toFixed(2);
-    const invNum = `enc-${encounterId}`;
-    let saleResponse: RectangleHealthSaleResponse;
-    if (paymentDetails.paymentToken) {
-      saleResponse = await rhClient.saleViaToken({
-        payment_token: paymentDetails.paymentToken,
-        amount: amountDecimal,
-        inv_num: invNum,
+    const finixClient = createFinixClient(requiredSecrets.secrets, entity);
+
+    // Resolve the Payment Instrument to charge: either a saved card the EHR
+    // selected, or a one-time card just tokenized via Finix Hosted Fields,
+    // which we exchange for a Payment Instrument under the patient's buyer
+    // Identity before charging.
+    let paymentInstrumentId = paymentDetails.paymentInstrumentId;
+    if (!paymentInstrumentId) {
+      if (!paymentDetails.token) {
+        throw INVALID_INPUT_ERROR(
+          '"paymentDetails.token" or "paymentDetails.paymentInstrumentId" is required for finix-card payments.'
+        );
+      }
+      const account = await getBillingAccountForPatient(patientId, oystehrClient);
+      if (!account?.id) {
+        throw FHIR_RESOURCE_NOT_FOUND('Account');
+      }
+      const patient = await oystehrClient.fhir
+        .get<Patient>({ resourceType: 'Patient', id: patientId })
+        .catch(() => undefined);
+      const buyerIdentityId = await getOrCreateBuyerIdentityId({
+        account,
+        patient,
+        finixClient,
+        oystehr: oystehrClient,
       });
-    } else if (paymentDetails.encryptedCardData) {
-      saleResponse = await rhClient.sale({
-        encrypted_card_data: paymentDetails.encryptedCardData,
-        amount: amountDecimal,
-        inv_num: invNum,
+      const instrument = await finixClient.createPaymentInstrument({
+        token: paymentDetails.token,
+        identityId: buyerIdentityId,
       });
-    } else {
-      throw INVALID_INPUT_ERROR(
-        '"paymentDetails.encryptedCardData" or "paymentDetails.paymentToken" is required for rh-card payments.'
+      if (!instrument.id) {
+        throw new Error('Finix did not return a payment_instrument id');
+      }
+      paymentInstrumentId = instrument.id;
+    }
+
+    const transfer: FinixTransfer = await finixClient.sale({
+      paymentInstrumentId,
+      amountInCents,
+      tags: { encounterId },
+    });
+    const status = mapFinixTransferState(transfer.state);
+    if (status !== 'approved') {
+      throw new Error(
+        `Finix sale not approved (state=${transfer.state ?? 'unknown'}): ${
+          transfer.failure_message ?? transfer.failure_code ?? 'no failure detail'
+        }`
       );
     }
-    if (!saleResponse.transaction_id) {
-      throw new Error('Rectangle Health sale completed without a transaction_id');
+    if (!transfer.id) {
+      throw new Error('Finix sale completed without a transfer id');
     }
-    paymentNoticeInput.rhTransactionId = saleResponse.transaction_id;
-    console.log('Rectangle Health sale completed:', saleResponse.transaction_id);
+    paymentNoticeInput.finixTransferId = transfer.id;
+    console.log('Finix sale completed:', transfer.id);
   } else {
     console.log('handling non card payment:', paymentMethod, amountInCents, description);
     // here's where we might set a candidPayment id once candid stuff has been added
@@ -209,26 +241,26 @@ const validateRequestParameters = (input: ZambdaInput): PostPatientPaymentInput 
     throw INVALID_INPUT_ERROR('"encounterId" must be a valid UUID.');
   }
 
-  const { paymentMethod, amountInCents, description, encryptedCardData, paymentToken } = paymentDetails;
+  const { paymentMethod, amountInCents, description, token, paymentInstrumentId } = paymentDetails;
   if (
     paymentMethod !== 'card-reader' &&
     paymentMethod !== 'external-card-reader' &&
     paymentMethod !== 'cash' &&
     paymentMethod !== 'check' &&
-    paymentMethod !== 'rh-card'
+    paymentMethod !== 'finix-card'
   ) {
     throw INVALID_INPUT_ERROR(
-      '"paymentDetails.paymentMethod" must be "rh-card", "card-reader", "external-card-reader", "cash", or "check".'
+      '"paymentDetails.paymentMethod" must be "finix-card", "card-reader", "external-card-reader", "cash", or "check".'
     );
   }
-  if (paymentMethod === 'rh-card' && !encryptedCardData && !paymentToken) {
+  if (paymentMethod === 'finix-card' && !token && !paymentInstrumentId) {
     throw INVALID_INPUT_ERROR(
-      '"paymentDetails.encryptedCardData" or "paymentDetails.paymentToken" is required for rh-card payments.'
+      '"paymentDetails.token" or "paymentDetails.paymentInstrumentId" is required for finix-card payments.'
     );
   }
-  if (paymentMethod === 'rh-card' && encryptedCardData && paymentToken) {
+  if (paymentMethod === 'finix-card' && token && paymentInstrumentId) {
     throw INVALID_INPUT_ERROR(
-      '"paymentDetails" cannot specify both "encryptedCardData" and "paymentToken" for rh-card payments.'
+      '"paymentDetails" cannot specify both "token" and "paymentInstrumentId" for finix-card payments.'
     );
   }
   const verifiedAmount = parseInt(amountInCents);
@@ -267,20 +299,20 @@ const validateEnvironmentParameters = (input: ZambdaInput): RequiredSecrets => {
 
 interface PaymentNoticeInput extends Omit<PostPatientPaymentInput, 'patientId'> {
   submitterRef: Reference;
-  rhTransactionId?: string;
+  finixTransferId?: string;
   recipientId: string;
   dateTimeIso: string;
 }
 
 const makePaymentNotice = (input: PaymentNoticeInput): PaymentNotice => {
-  const { encounterId, paymentDetails, submitterRef, rhTransactionId, dateTimeIso, recipientId } = input;
+  const { encounterId, paymentDetails, submitterRef, finixTransferId, dateTimeIso, recipientId } = input;
 
   const { paymentMethod, amountInCents } = paymentDetails;
 
   let identifier: Identifier | undefined;
 
-  if (paymentMethod === 'rh-card' && rhTransactionId) {
-    identifier = makeBusinessIdentifierForRectangleHealthPayment(rhTransactionId);
+  if (paymentMethod === 'finix-card' && finixTransferId) {
+    identifier = makeBusinessIdentifierForFinixTransfer(finixTransferId);
   }
 
   // the created timestamp is in UTC and the exact date in any timezone can always be derived from there
@@ -306,9 +338,7 @@ const makePaymentNotice = (input: PaymentNoticeInput): PaymentNotice => {
     status: 'active',
     created,
     disposition:
-      paymentMethod === 'rh-card'
-        ? 'card payment processed by Rectangle Health'
-        : `${paymentMethod} collected from patient`,
+      paymentMethod === 'finix-card' ? 'card payment processed by Finix' : `${paymentMethod} collected from patient`,
     outcome: 'complete',
     paymentDate,
     paymentAmount,

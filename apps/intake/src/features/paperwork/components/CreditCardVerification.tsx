@@ -11,16 +11,19 @@ import {
   useTheme,
 } from '@mui/material';
 import { FC, useCallback, useEffect, useMemo, useState } from 'react';
-import { CreditCardBrandIcon } from 'ui-components';
-import { RHCreditCardInfo } from 'utils';
+import { AddFinixCreditCardForm, CreditCardBrandIcon, FinixEnvironment } from 'ui-components';
+import { FinixCreditCardInfo } from 'utils';
 import { BoldPurpleInputLabel } from '../../../components/form';
 import { dataTestIds } from '../../../helpers/data-test-ids';
 import { otherColors } from '../../../IntakeThemeProvider';
-import { useSetDefaultRHPaymentMethod, useSetupRHPaymentMethod } from '../../../telemed/features/paperwork';
+import {
+  useGetFinixPaymentConfig,
+  useSetDefaultFinixPaymentMethod,
+  useSetupFinixPaymentMethod,
+} from '../../../telemed/features/paperwork';
 import { usePaperworkContext } from '../context';
 import { useCreditCardContext } from '../hooks/useCreditCardContext';
 import { useCreditCardStore } from '../stores/useCreditCardStore';
-import { RHAddCreditCardFormStub } from './RHAddCreditCardFormStub';
 
 interface CreditCardVerificationProps {
   fieldId: string;
@@ -50,8 +53,9 @@ export const CreditCardVerification: FC<CreditCardVerificationProps> = ({ fieldI
     }
   }, [cards, defaultCard?.id, selectedOption]);
 
-  const { mutateAsync: setDefaultAsync, isPending: isSetDefaultLoading } = useSetDefaultRHPaymentMethod(patient?.id);
-  const { mutateAsync: setupRHCard, isPending: isSetupCardPending } = useSetupRHPaymentMethod(patient?.id);
+  const { mutateAsync: setDefaultAsync, isPending: isSetDefaultLoading } = useSetDefaultFinixPaymentMethod(patient?.id);
+  const { mutateAsync: setupFinixCard, isPending: isSetupCardPending } = useSetupFinixPaymentMethod(patient?.id);
+  const { data: finixConfig, isFetching: finixConfigLoading } = useGetFinixPaymentConfig(patient?.id);
   const isSavingCard = useCreditCardStore((state) => state.isSavingCard);
 
   useEffect(() => {
@@ -89,19 +93,15 @@ export const CreditCardVerification: FC<CreditCardVerificationProps> = ({ fieldI
   );
 
   const setupCardCallback = useCallback(
-    async (params: {
-      encryptedCardData: string;
-      last4?: string;
-      brand?: string;
-    }): Promise<{ paymentMethodId: string }> => {
-      const result = await setupRHCard({
-        encryptedCardData: params.encryptedCardData,
+    async (params: { token: string; brand?: string }): Promise<{ paymentMethodId: string }> => {
+      const result = await setupFinixCard({
+        token: params.token,
         makeDefault: cards.length === 0,
       });
       await refetchRHPaymentMethods();
       return { paymentMethodId: result.paymentMethodId };
     },
-    [cards.length, refetchRHPaymentMethods, setupRHCard]
+    [cards.length, refetchRHPaymentMethods, setupFinixCard]
   );
 
   const handleNewPaymentMethod = useCallback(
@@ -146,6 +146,9 @@ export const CreditCardVerification: FC<CreditCardVerificationProps> = ({ fieldI
         onMakePrimary={onMakePrimary}
         handleNewPaymentMethod={handleNewPaymentMethod}
         setupCard={setupCardCallback}
+        finixEnvironment={finixConfig?.environment}
+        finixApplicationId={finixConfig?.applicationId}
+        finixConfigLoading={finixConfigLoading}
       />
     </Box>
   );
@@ -154,7 +157,7 @@ export const CreditCardVerification: FC<CreditCardVerificationProps> = ({ fieldI
 interface CreditCardContentProps {
   pendingSelection: string | undefined;
   selectedOption: string | undefined;
-  cards: RHCreditCardInfo[];
+  cards: FinixCreditCardInfo[];
   disabled: boolean;
   isSavingCard: boolean;
   required: boolean;
@@ -162,11 +165,10 @@ interface CreditCardContentProps {
   setErrorMessage: (message: string | undefined) => void;
   onMakePrimary: (id: string) => Promise<void>;
   handleNewPaymentMethod: (id: string) => Promise<void>;
-  setupCard: (params: {
-    encryptedCardData: string;
-    last4?: string;
-    brand?: string;
-  }) => Promise<{ paymentMethodId: string }>;
+  setupCard: (params: { token: string; brand?: string }) => Promise<{ paymentMethodId: string }>;
+  finixEnvironment: FinixEnvironment | undefined;
+  finixApplicationId: string | undefined;
+  finixConfigLoading: boolean;
 }
 
 const CreditCardContent: FC<CreditCardContentProps> = ({
@@ -181,6 +183,9 @@ const CreditCardContent: FC<CreditCardContentProps> = ({
   onMakePrimary,
   handleNewPaymentMethod,
   setupCard,
+  finixEnvironment,
+  finixApplicationId,
+  finixConfigLoading,
 }) => {
   const theme = useTheme();
   const cardFormRef = useCreditCardStore((state) => state.cardFormRef);
@@ -270,14 +275,25 @@ const CreditCardContent: FC<CreditCardContentProps> = ({
         </RadioGroup>
       </Box>
 
-      <RHAddCreditCardFormStub
-        ref={cardFormRef}
-        disabled={disabled}
-        isSaving={isSavingCard}
-        onCardChange={handleCardChange}
-        setupCard={setupCard}
-        selectPaymentMethod={handleNewPaymentMethod}
-      />
+      {finixConfigLoading && !finixApplicationId ? (
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }} data-testid={dataTestIds.cardNumber}>
+          <CircularProgress size={20} />
+          <Typography>Loading secure card form…</Typography>
+        </Box>
+      ) : finixEnvironment && finixApplicationId ? (
+        <AddFinixCreditCardForm
+          ref={cardFormRef}
+          environment={finixEnvironment}
+          applicationId={finixApplicationId}
+          disabled={disabled}
+          isSaving={isSavingCard}
+          onCardChange={handleCardChange}
+          setupCard={setupCard}
+          selectPaymentMethod={handleNewPaymentMethod}
+        />
+      ) : (
+        <Typography color="error">Unable to load the secure card form. Please try again.</Typography>
+      )}
       <Snackbar
         anchorOrigin={{ vertical: 'top', horizontal: 'right' }}
         open={errorMessage !== undefined}

@@ -1,19 +1,19 @@
 import { APIGatewayProxyResult } from 'aws-lambda';
 import { Account } from 'fhir/r4b';
-import { RHCreditCardInfo, RHListPaymentMethodsZambdaOutput } from 'utils';
+import { FinixCreditCardInfo, FinixListPaymentMethodsZambdaOutput } from 'utils';
 import { createOystehrClient, getAuth0Token, lambdaResponse, wrapHandler, ZambdaInput } from '../../../../shared';
 import { getBillingAccountForPatient, validateUserHasAccessToPatientAccount } from '../../helpers';
 import {
   getBrandFromIdentifier,
+  getFinixPaymentInstrumentIdentifiers,
   getLast4FromIdentifier,
-  getRectangleHealthPaymentTokenIdentifiers,
-  isDefaultRectangleHealthPaymentTokenIdentifier,
+  isDefaultFinixPaymentInstrumentIdentifier,
 } from '../helpers';
 import { validateRequestParameters } from './validateRequestParameters';
 
 let m2mClientToken: string;
 
-export const index = wrapHandler('rh-payment-list', async (input: ZambdaInput): Promise<APIGatewayProxyResult> => {
+export const index = wrapHandler('finix-payment-list', async (input: ZambdaInput): Promise<APIGatewayProxyResult> => {
   console.group('validateRequestParameters');
   let validatedParameters: ReturnType<typeof validateRequestParameters>;
   try {
@@ -37,13 +37,13 @@ export const index = wrapHandler('rh-payment-list', async (input: ZambdaInput): 
   ));
 
   const account: Account | undefined = await getBillingAccountForPatient(patientId, oystehr);
-  const identifiers = getRectangleHealthPaymentTokenIdentifiers(account);
+  const identifiers = getFinixPaymentInstrumentIdentifiers(account);
 
-  const cards: RHCreditCardInfo[] = identifiers
+  const cards: FinixCreditCardInfo[] = identifiers
     .filter((id): id is typeof id & { value: string } => typeof id.value === 'string' && id.value.length > 0)
     .map((id) => ({
       id: id.value,
-      default: isDefaultRectangleHealthPaymentTokenIdentifier(id),
+      default: isDefaultFinixPaymentInstrumentIdentifier(id),
       brand: getBrandFromIdentifier(id),
       last4: getLast4FromIdentifier(id),
     }))
@@ -53,6 +53,6 @@ export const index = wrapHandler('rh-payment-list', async (input: ZambdaInput): 
       return 0;
     });
 
-  const output: RHListPaymentMethodsZambdaOutput = { cards };
+  const output: FinixListPaymentMethodsZambdaOutput = { cards };
   return lambdaResponse(200, output);
 });

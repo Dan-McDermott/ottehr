@@ -2,30 +2,30 @@ import Oystehr from '@oystehr/sdk';
 import { Identifier, Organization } from 'fhir/r4b';
 import * as fs from 'fs';
 import * as path from 'path';
-import { RH_MAC_AFTEROURS, RH_MAC_SPIRE, RH_MERCHANT_ACCOUNT_CODE_SYSTEM } from 'utils';
+import { ClinicEntity, FINIX_MERCHANT_ENTITY_SYSTEM } from 'utils';
 
-// W1.4 — one-shot, idempotent seed: upserts the Rectangle Health MAC
-// identifier on the AfterOurs and Spire legal-entity Organization resources.
+// One-shot, idempotent seed: upserts the Finix clinic-entity identifier on the
+// AfterOurs and Spire legal-entity Organization resources. The entity slug is
+// what the payment routing (utils/lib/fhir/payments.ts) maps to the per-entity
+// Finix Application/Merchant secrets. The slug is environment-independent
+// (unlike Finix Merchant IDs), so the same seed works for Sandbox and Live.
 //
 // Usage:
-//   npx tsx packages/zambdas/scripts/seed-rh-organization-macs.ts <env> [--dry-run]
-//   # e.g. npx tsx packages/zambdas/scripts/seed-rh-organization-macs.ts local
+//   npx tsx packages/zambdas/scripts/seed-finix-organization-entities.ts <env> [--dry-run]
+//   # e.g. npx tsx packages/zambdas/scripts/seed-finix-organization-entities.ts local
 //
 // Env JSON is loaded from config/.env/<env>.json and must contain:
 //   AUTH0_ENDPOINT, AUTH0_CLIENT, AUTH0_SECRET, AUTH0_AUDIENCE,
 //   FHIR_API, PROJECT_API, PROJECT_ID
-//
-// Re-running the script after a successful run is a no-op (idempotent).
 
 interface EntityTarget {
-  entity: 'afterours' | 'spire';
+  entity: ClinicEntity;
   name: string;
-  mac: string;
 }
 
 const TARGETS: EntityTarget[] = [
-  { entity: 'afterours', name: 'AfterOurs, Inc.', mac: RH_MAC_AFTEROURS },
-  { entity: 'spire', name: 'Spire Health Pathways', mac: RH_MAC_SPIRE },
+  { entity: 'afterours', name: 'AfterOurs, Inc.' },
+  { entity: 'spire', name: 'Spire Health Pathways' },
 ];
 
 function loadEnv(envName: string): void {
@@ -36,7 +36,7 @@ function loadEnv(envName: string): void {
   for (const [k, v] of Object.entries(cfg)) {
     if (process.env[k] === undefined) process.env[k] = String(v);
   }
-  console.log(`[seed-rh-macs] loaded env from ${envPath}`);
+  console.log(`[seed-finix-entities] loaded env from ${envPath}`);
 }
 
 async function getAccessToken(): Promise<string> {
@@ -73,15 +73,15 @@ async function findOrganizationByName(oystehr: Oystehr, name: string): Promise<O
   return matches[0];
 }
 
-function upsertMacIdentifier(org: Organization, mac: string): { changed: boolean; org: Organization } {
+function upsertEntityIdentifier(org: Organization, entity: ClinicEntity): { changed: boolean; org: Organization } {
   const existing = org.identifier ?? [];
-  const matchIdx = existing.findIndex((i) => i.system === RH_MERCHANT_ACCOUNT_CODE_SYSTEM);
-  const desired: Identifier = { system: RH_MERCHANT_ACCOUNT_CODE_SYSTEM, value: mac };
+  const matchIdx = existing.findIndex((i) => i.system === FINIX_MERCHANT_ENTITY_SYSTEM);
+  const desired: Identifier = { system: FINIX_MERCHANT_ENTITY_SYSTEM, value: entity };
 
   if (matchIdx === -1) {
     return { changed: true, org: { ...org, identifier: [...existing, desired] } };
   }
-  if (existing[matchIdx].value === mac) {
+  if (existing[matchIdx].value === entity) {
     return { changed: false, org };
   }
   const next = existing.slice();
@@ -93,7 +93,7 @@ async function seed(): Promise<void> {
   const args = process.argv.slice(2);
   const envName = args[0] && !args[0].startsWith('--') ? args[0] : undefined;
   if (!envName) {
-    console.error('Usage: tsx packages/zambdas/scripts/seed-rh-organization-macs.ts <env> [--dry-run]');
+    console.error('Usage: tsx packages/zambdas/scripts/seed-finix-organization-entities.ts <env> [--dry-run]');
     process.exit(2);
   }
   const dryRun = args.includes('--dry-run') || process.env.DRY_RUN === 'true';
@@ -104,7 +104,7 @@ async function seed(): Promise<void> {
   const token = await getAccessToken();
   const oystehr = new Oystehr({ accessToken: token, fhirApiUrl: FHIR_API, projectApiUrl: PROJECT_API });
 
-  console.log(`[seed-rh-macs] mode=${dryRun ? 'DRY-RUN' : 'LIVE'} system=${RH_MERCHANT_ACCOUNT_CODE_SYSTEM}`);
+  console.log(`[seed-finix-entities] mode=${dryRun ? 'DRY-RUN' : 'LIVE'} system=${FINIX_MERCHANT_ENTITY_SYSTEM}`);
 
   let updated = 0;
   let unchanged = 0;
@@ -113,32 +113,36 @@ async function seed(): Promise<void> {
   for (const target of TARGETS) {
     const org = await findOrganizationByName(oystehr, target.name);
     if (!org || !org.id) {
-      console.warn(`[seed-rh-macs] MISSING — no Organization named "${target.name}" (${target.entity})`);
+      console.warn(`[seed-finix-entities] MISSING — no Organization named "${target.name}" (${target.entity})`);
       missing += 1;
       continue;
     }
 
-    const { changed, org: nextOrg } = upsertMacIdentifier(org, target.mac);
+    const { changed, org: nextOrg } = upsertEntityIdentifier(org, target.entity);
     if (!changed) {
-      console.log(`[seed-rh-macs] OK — Organization/${org.id} "${target.name}" already has MAC ${target.mac}`);
+      console.log(
+        `[seed-finix-entities] OK — Organization/${org.id} "${target.name}" already tagged entity=${target.entity}`
+      );
       unchanged += 1;
       continue;
     }
     if (dryRun) {
-      console.log(`[seed-rh-macs] WOULD-UPDATE — Organization/${org.id} "${target.name}" → MAC ${target.mac}`);
+      console.log(
+        `[seed-finix-entities] WOULD-UPDATE — Organization/${org.id} "${target.name}" → entity=${target.entity}`
+      );
       updated += 1;
       continue;
     }
     await oystehr.fhir.update<Organization>(nextOrg as Organization & { id: string });
-    console.log(`[seed-rh-macs] UPDATED — Organization/${org.id} "${target.name}" → MAC ${target.mac}`);
+    console.log(`[seed-finix-entities] UPDATED — Organization/${org.id} "${target.name}" → entity=${target.entity}`);
     updated += 1;
   }
 
-  console.log(`[seed-rh-macs] done. updated=${updated} unchanged=${unchanged} missing=${missing}`);
+  console.log(`[seed-finix-entities] done. updated=${updated} unchanged=${unchanged} missing=${missing}`);
   if (missing > 0) process.exit(1);
 }
 
 seed().catch((err) => {
-  console.error('[seed-rh-macs] fatal:', err);
+  console.error('[seed-finix-entities] fatal:', err);
   process.exit(1);
 });

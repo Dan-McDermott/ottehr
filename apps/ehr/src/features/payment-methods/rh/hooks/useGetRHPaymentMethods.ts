@@ -1,23 +1,23 @@
 import { useQuery, UseQueryResult } from '@tanstack/react-query';
 import { useApiClients } from 'src/hooks/useAppClients';
-import { chooseJson, RHListPaymentMethodsZambdaOutput, useSuccessQuery } from 'utils';
+import { chooseJson, FinixListPaymentMethodsZambdaOutput, useSuccessQuery } from 'utils';
 
-interface GetRHPaymentMethodsParams {
+interface GetFinixPaymentMethodsParams {
   patientId: string | undefined;
   enabled?: boolean;
-  onSuccess?: (data: RHListPaymentMethodsZambdaOutput | null) => void;
+  onSuccess?: (data: FinixListPaymentMethodsZambdaOutput | null) => void;
 }
 
-export const RH_PAYMENT_METHODS_QUERY_KEY = 'rh-payment-methods-list';
+export const FINIX_PAYMENT_METHODS_QUERY_KEY = 'finix-payment-methods-list';
 
-export const useGetRHPaymentMethods = (
-  input: GetRHPaymentMethodsParams
-): UseQueryResult<RHListPaymentMethodsZambdaOutput, Error> => {
+export const useGetFinixPaymentMethods = (
+  input: GetFinixPaymentMethodsParams
+): UseQueryResult<FinixListPaymentMethodsZambdaOutput, Error> => {
   const { patientId, enabled = true, onSuccess } = input;
   const { oystehrZambda } = useApiClients();
 
   const queryResult = useQuery({
-    queryKey: [RH_PAYMENT_METHODS_QUERY_KEY, patientId],
+    queryKey: [FINIX_PAYMENT_METHODS_QUERY_KEY, patientId],
 
     queryFn: async () => {
       if (!oystehrZambda) {
@@ -28,10 +28,10 @@ export const useGetRHPaymentMethods = (
       }
 
       const result = await oystehrZambda.zambda.execute({
-        id: 'rh-payment-methods-list',
+        id: 'finix-payment-methods-list',
         patientId,
       });
-      return chooseJson<RHListPaymentMethodsZambdaOutput>(result);
+      return chooseJson<FinixListPaymentMethodsZambdaOutput>(result);
     },
 
     enabled: enabled && Boolean(patientId) && Boolean(oystehrZambda),

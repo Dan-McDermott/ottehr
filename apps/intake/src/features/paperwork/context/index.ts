@@ -3,11 +3,11 @@ import { QuestionnaireResponse, QuestionnaireResponseItem } from 'fhir/r4b';
 import { useOutletContext } from 'react-router-dom';
 import {
   AppointmentSummary,
+  FinixCreditCardInfo,
+  FinixListPaymentMethodsZambdaOutput,
   IntakeQuestionnaireItem,
   PaperworkPatient,
   QuestionnaireFormFields,
-  RHCreditCardInfo,
-  RHListPaymentMethodsZambdaOutput,
   UCGetPaperworkResponse,
 } from 'utils';
 
@@ -21,12 +21,12 @@ export interface PaperworkContext
   patient: PaperworkPatient | undefined;
   questionnaireResponse: QuestionnaireResponse | undefined;
   // Rectangle Health credit-card paperwork path.
-  rhPaymentMethods: RHCreditCardInfo[];
+  rhPaymentMethods: FinixCreditCardInfo[];
   rhCardsAreLoading: boolean;
   rhPaymentMethodStateInitializing: boolean;
   refetchRHPaymentMethods: (
     options?: RefetchOptions | undefined
-  ) => Promise<QueryObserverResult<RHListPaymentMethodsZambdaOutput, Error>>;
+  ) => Promise<QueryObserverResult<FinixListPaymentMethodsZambdaOutput, Error>>;
   setContinueLabel?: (label: string | undefined) => void;
   saveButtonDisabled?: boolean;
   setSaveButtonDisabled: (newVal: boolean) => void;

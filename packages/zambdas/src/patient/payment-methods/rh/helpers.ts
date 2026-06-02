@@ -1,130 +1,137 @@
 import Oystehr from '@oystehr/sdk';
 import { Operation } from 'fast-json-patch';
-import { Account, Identifier, Organization, Patient } from 'fhir/r4b';
-import { getSecret, Secrets, SecretsKeys } from 'utils';
-import { RH_PAYMENT_TOKEN_ID_SYSTEM, RHClinicEntity } from '../../../shared/rectangleHealth';
+import { Account, Identifier, Patient } from 'fhir/r4b';
+import { ClinicEntity, getEntityForPatient, PatientEntityUnresolvableError } from 'utils';
+import {
+  FINIX_BUYER_IDENTITY_ID_SYSTEM,
+  FINIX_PAYMENT_INSTRUMENT_ID_SYSTEM,
+  FinixClient,
+  makeBusinessIdentifierForFinixBuyerIdentity,
+} from '../../../shared/finix';
 
 // ---------------------------------------------------------------------------
-// Extension URLs used to stash card metadata returned by RH alongside the
-// opaque payment_token. RH v3 responses surface card_brand / last_four-style
-// fields when the SDK includes them; we store whatever we get so the list
-// endpoint can render the saved-card UI without a round-trip to RH.
+// Extension URLs used to stash card metadata returned by Finix alongside the
+// Payment Instrument ID, so the list endpoint can render the saved-card UI
+// without a round-trip to Finix.
 // ---------------------------------------------------------------------------
 
-export const RH_PAYMENT_TOKEN_BRAND_EXTENSION_URL = 'https://afterours.com/extensions/rh-payment-token-brand';
-export const RH_PAYMENT_TOKEN_LAST4_EXTENSION_URL = 'https://afterours.com/extensions/rh-payment-token-last4';
+export const FINIX_PAYMENT_INSTRUMENT_BRAND_EXTENSION_URL =
+  'https://afterours.com/extensions/finix-payment-instrument-brand';
+export const FINIX_PAYMENT_INSTRUMENT_LAST4_EXTENSION_URL =
+  'https://afterours.com/extensions/finix-payment-instrument-last4';
 
 // ---------------------------------------------------------------------------
-// FHIR identifier-system helpers for RH Card-on-File payment tokens
+// FHIR identifier-system helpers for Finix Payment Instruments (saved cards)
 // ---------------------------------------------------------------------------
 
-export const RH_PAYMENT_TOKEN_USE_DEFAULT: Identifier['use'] = 'official';
-export const RH_PAYMENT_TOKEN_USE_NON_DEFAULT: Identifier['use'] = 'secondary';
+export const FINIX_PAYMENT_INSTRUMENT_USE_DEFAULT: Identifier['use'] = 'official';
+export const FINIX_PAYMENT_INSTRUMENT_USE_NON_DEFAULT: Identifier['use'] = 'secondary';
 
-export const isRectangleHealthPaymentTokenIdentifier = (identifier: Identifier): boolean =>
-  identifier.system === RH_PAYMENT_TOKEN_ID_SYSTEM;
+export const isFinixPaymentInstrumentIdentifier = (identifier: Identifier): boolean =>
+  identifier.system === FINIX_PAYMENT_INSTRUMENT_ID_SYSTEM;
 
-export const getRectangleHealthPaymentTokenIdentifiers = (account: Account | undefined): Identifier[] =>
-  (account?.identifier ?? []).filter(isRectangleHealthPaymentTokenIdentifier);
+export const getFinixPaymentInstrumentIdentifiers = (account: Account | undefined): Identifier[] =>
+  (account?.identifier ?? []).filter(isFinixPaymentInstrumentIdentifier);
 
-export const isDefaultRectangleHealthPaymentTokenIdentifier = (identifier: Identifier): boolean =>
-  identifier.use === RH_PAYMENT_TOKEN_USE_DEFAULT;
+export const isDefaultFinixPaymentInstrumentIdentifier = (identifier: Identifier): boolean =>
+  identifier.use === FINIX_PAYMENT_INSTRUMENT_USE_DEFAULT;
 
 export const getBrandFromIdentifier = (identifier: Identifier): string | undefined =>
-  identifier.extension?.find((e) => e.url === RH_PAYMENT_TOKEN_BRAND_EXTENSION_URL)?.valueString;
+  identifier.extension?.find((e) => e.url === FINIX_PAYMENT_INSTRUMENT_BRAND_EXTENSION_URL)?.valueString;
 
 export const getLast4FromIdentifier = (identifier: Identifier): string | undefined =>
-  identifier.extension?.find((e) => e.url === RH_PAYMENT_TOKEN_LAST4_EXTENSION_URL)?.valueString;
+  identifier.extension?.find((e) => e.url === FINIX_PAYMENT_INSTRUMENT_LAST4_EXTENSION_URL)?.valueString;
 
-export const buildRectangleHealthPaymentTokenIdentifier = (params: {
-  paymentToken: string;
+export const buildFinixPaymentInstrumentIdentifier = (params: {
+  paymentInstrumentId: string;
   isDefault: boolean;
   brand?: string;
   last4?: string;
 }): Identifier => {
   const extension = [
-    params.brand ? { url: RH_PAYMENT_TOKEN_BRAND_EXTENSION_URL, valueString: params.brand } : undefined,
-    params.last4 ? { url: RH_PAYMENT_TOKEN_LAST4_EXTENSION_URL, valueString: params.last4 } : undefined,
+    params.brand ? { url: FINIX_PAYMENT_INSTRUMENT_BRAND_EXTENSION_URL, valueString: params.brand } : undefined,
+    params.last4 ? { url: FINIX_PAYMENT_INSTRUMENT_LAST4_EXTENSION_URL, valueString: params.last4 } : undefined,
   ].filter((e): e is { url: string; valueString: string } => e !== undefined);
   const identifier: Identifier = {
-    system: RH_PAYMENT_TOKEN_ID_SYSTEM,
-    value: params.paymentToken,
-    use: params.isDefault ? RH_PAYMENT_TOKEN_USE_DEFAULT : RH_PAYMENT_TOKEN_USE_NON_DEFAULT,
+    system: FINIX_PAYMENT_INSTRUMENT_ID_SYSTEM,
+    value: params.paymentInstrumentId,
+    use: params.isDefault ? FINIX_PAYMENT_INSTRUMENT_USE_DEFAULT : FINIX_PAYMENT_INSTRUMENT_USE_NON_DEFAULT,
   };
   if (extension.length > 0) identifier.extension = extension;
   return identifier;
 };
 
 // ---------------------------------------------------------------------------
-// Patient -> Organization -> RHClinicEntity resolver (TEMPORARY)
-//
-// The canonical resolver for this lives in W1.4 (Merchant routing). Until
-// that lands we use a minimal inline resolver that:
-//   1. Looks up the Patient.
-//   2. Reads Patient.managingOrganization (if any) and resolves the
-//      Organization.
-//   3. Picks the entity from the RH MAC code on the Organization (extension
-//      below) or by matching the MAC against the configured per-entity MACs.
-//   4. Falls back to "afterours" with a console warning if nothing else
-//      resolves (single-entity sandbox default).
-//
-// TODO(W1.4): replace this with the shared Encounter/Location/Organization
-// helpers that the merchant-routing track will introduce.
+// Clinic-entity resolution for a Patient
 // ---------------------------------------------------------------------------
+// Uses the canonical Encounter/Location/Organization resolver from `utils`,
+// falling back to "afterours" with a warning when the patient's Organizations
+// are not yet tagged with an entity slug (single-entity sandbox default).
 
-export const RH_MERCHANT_ACCOUNT_CODE_EXTENSION_URL = 'https://afterours.com/extensions/rh-merchant-account-code';
-
-export const getMerchantAccountCodeFromOrganization = (organization: Organization | undefined): string | undefined => {
-  const ext = organization?.extension?.find((e) => e.url === RH_MERCHANT_ACCOUNT_CODE_EXTENSION_URL);
-  return ext?.valueString ?? ext?.valueCode;
-};
-
-export const resolveRHClinicEntityFromMerchantAccountCode = (
-  mac: string | undefined,
-  secrets: Secrets | null
-): RHClinicEntity | undefined => {
-  if (!mac) return undefined;
-  const afterours = getSecret(SecretsKeys.RH_MAC_AFTEROURS, secrets);
-  const spire = getSecret(SecretsKeys.RH_MAC_SPIRE, secrets);
-  if (mac === afterours) return 'afterours';
-  if (mac === spire) return 'spire';
-  return undefined;
-};
-
-export const resolveRHClinicEntityForPatient = async (
-  patientId: string,
-  oystehr: Oystehr,
-  secrets: Secrets | null
-): Promise<RHClinicEntity> => {
+export const resolveClinicEntityForPatient = async (patientId: string, oystehr: Oystehr): Promise<ClinicEntity> => {
   let patient: Patient | undefined;
   try {
     patient = await oystehr.fhir.get<Patient>({ resourceType: 'Patient', id: patientId });
   } catch (error) {
-    console.warn('Failed to read Patient ' + patientId + ' for RH entity resolution', error);
+    console.warn(`Failed to read Patient/${patientId} for Finix entity resolution`, error);
   }
-
-  const orgRef = patient?.managingOrganization?.reference;
-  if (orgRef && orgRef.startsWith('Organization/')) {
-    const orgId = orgRef.split('/')[1];
+  if (patient) {
     try {
-      const organization = await oystehr.fhir.get<Organization>({ resourceType: 'Organization', id: orgId });
-      const mac = getMerchantAccountCodeFromOrganization(organization);
-      const entity = resolveRHClinicEntityFromMerchantAccountCode(mac, secrets);
-      if (entity) return entity;
-      console.warn(
-        'Organization/' +
-          orgId +
-          ' did not resolve to a known RH entity (mac=' +
-          (mac ?? 'none') +
-          '); defaulting to afterours.'
-      );
+      return await getEntityForPatient(patient, oystehr);
     } catch (error) {
-      console.warn('Failed to read Organization/' + orgId + ' for RH entity resolution', error);
+      if (error instanceof PatientEntityUnresolvableError) {
+        console.warn(`${error.message}; defaulting Finix entity to afterours.`);
+      } else {
+        console.warn(
+          `Unexpected error resolving Finix entity for Patient/${patientId}; defaulting to afterours.`,
+          error
+        );
+      }
     }
-  } else {
-    console.warn('Patient/' + patientId + ' has no managingOrganization; defaulting RH entity to afterours.');
   }
   return 'afterours';
+};
+
+// ---------------------------------------------------------------------------
+// Finix buyer Identity (one per patient, reused across cards and charges)
+// ---------------------------------------------------------------------------
+
+export const getStoredBuyerIdentityId = (account: Account | undefined): string | undefined =>
+  (account?.identifier ?? []).find((id) => id.system === FINIX_BUYER_IDENTITY_ID_SYSTEM)?.value;
+
+/**
+ * Returns the patient's Finix buyer Identity ID, creating (and persisting on the
+ * Account) one if none exists yet. The Identity owns the patient's Payment
+ * Instruments and is reused for one-time and saved-card charges.
+ */
+export const getOrCreateBuyerIdentityId = async (params: {
+  account: Account;
+  patient: Patient | undefined;
+  finixClient: FinixClient;
+  oystehr: Oystehr;
+}): Promise<string> => {
+  const { account, patient, finixClient, oystehr } = params;
+  const existing = getStoredBuyerIdentityId(account);
+  if (existing) return existing;
+
+  const created = await finixClient.createBuyerIdentity({
+    firstName: patient?.name?.[0]?.given?.[0],
+    lastName: patient?.name?.[0]?.family,
+    email: patient?.telecom?.find((t) => t.system === 'email')?.value,
+    phone: patient?.telecom?.find((t) => t.system === 'phone')?.value,
+  });
+  if (!created.id) {
+    throw new Error('Finix did not return an Identity id when creating buyer Identity');
+  }
+
+  if (!account.id) throw new Error('Account id is required to persist buyer Identity');
+  const nextIdentifiers = [...(account.identifier ?? []), makeBusinessIdentifierForFinixBuyerIdentity(created.id)];
+  await oystehr.fhir.patch<Account>({
+    id: account.id,
+    resourceType: 'Account',
+    operations: buildAccountIdentifierPatchOperations(account, nextIdentifiers),
+  });
+  return created.id;
 };
 
 // ---------------------------------------------------------------------------
@@ -138,14 +145,14 @@ export const buildAccountIdentifierPatchOperations = (account: Account, identifi
   return [{ op: 'replace', path: '/identifier', value: identifiers }];
 };
 
-export const setDefaultPaymentTokenIdentifiers = (
+export const setDefaultPaymentInstrumentIdentifiers = (
   identifiers: Identifier[],
   defaultPaymentMethodId: string | undefined
 ): Identifier[] =>
   identifiers.map((identifier) => {
-    if (!isRectangleHealthPaymentTokenIdentifier(identifier)) return identifier;
+    if (!isFinixPaymentInstrumentIdentifier(identifier)) return identifier;
     if (defaultPaymentMethodId && identifier.value === defaultPaymentMethodId) {
-      return { ...identifier, use: RH_PAYMENT_TOKEN_USE_DEFAULT };
+      return { ...identifier, use: FINIX_PAYMENT_INSTRUMENT_USE_DEFAULT };
     }
-    return { ...identifier, use: RH_PAYMENT_TOKEN_USE_NON_DEFAULT };
+    return { ...identifier, use: FINIX_PAYMENT_INSTRUMENT_USE_NON_DEFAULT };
   });

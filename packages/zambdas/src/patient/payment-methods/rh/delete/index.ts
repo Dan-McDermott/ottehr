@@ -1,23 +1,23 @@
 import { APIGatewayProxyResult } from 'aws-lambda';
 import { Account } from 'fhir/r4b';
-import { FHIR_RESOURCE_NOT_FOUND, RHPaymentMethodDeleteZambdaOutput } from 'utils';
+import { FHIR_RESOURCE_NOT_FOUND, FinixPaymentMethodDeleteZambdaOutput } from 'utils';
 import { createOystehrClient, getAuth0Token, lambdaResponse, wrapHandler, ZambdaInput } from '../../../../shared';
-import { createRectangleHealthClient, RectangleHealthApiError } from '../../../../shared/rectangleHealth';
+import { createFinixClient, FinixApiError } from '../../../../shared/finix';
 import { getBillingAccountForPatient, validateUserHasAccessToPatientAccount } from '../../helpers';
 import {
   buildAccountIdentifierPatchOperations,
-  getRectangleHealthPaymentTokenIdentifiers,
-  isDefaultRectangleHealthPaymentTokenIdentifier,
-  isRectangleHealthPaymentTokenIdentifier,
-  resolveRHClinicEntityForPatient,
-  RH_PAYMENT_TOKEN_USE_DEFAULT,
+  FINIX_PAYMENT_INSTRUMENT_USE_DEFAULT,
+  getFinixPaymentInstrumentIdentifiers,
+  isDefaultFinixPaymentInstrumentIdentifier,
+  isFinixPaymentInstrumentIdentifier,
+  resolveClinicEntityForPatient,
 } from '../helpers';
 import { validateRequestParameters } from './validateRequestParameters';
 
 let m2mClientToken: string;
 
 export const index = wrapHandler(
-  'rh-del-payment-method',
+  'finix-del-payment-method',
   async (input: ZambdaInput): Promise<APIGatewayProxyResult> => {
     console.group('validateRequestParameters');
     let validatedParameters: ReturnType<typeof validateRequestParameters>;
@@ -46,33 +46,36 @@ export const index = wrapHandler(
       throw FHIR_RESOURCE_NOT_FOUND('Account');
     }
 
-    const rhIdentifiers = getRectangleHealthPaymentTokenIdentifiers(account);
-    const target = rhIdentifiers.find((id) => id.value === paymentMethodId);
+    const finixIdentifiers = getFinixPaymentInstrumentIdentifiers(account);
+    const target = finixIdentifiers.find((id) => id.value === paymentMethodId);
     if (!target) {
       return lambdaResponse(404, { message: 'paymentMethodId ' + paymentMethodId + ' not found on Account' });
     }
-    const wasDefault = isDefaultRectangleHealthPaymentTokenIdentifier(target);
+    const wasDefault = isDefaultFinixPaymentInstrumentIdentifier(target);
 
-    const entity = await resolveRHClinicEntityForPatient(patientId, oystehr, secrets);
-    const rh = createRectangleHealthClient(secrets, entity);
+    const entity = await resolveClinicEntityForPatient(patientId, oystehr);
+    const finix = createFinixClient(secrets, entity);
 
     try {
-      await rh.deletePaymentToken(paymentMethodId);
+      // Finix has no hard delete; disabling the Payment Instrument prevents reuse.
+      await finix.disablePaymentInstrument(paymentMethodId);
     } catch (error: unknown) {
-      // 404 from RH means the token is already gone — proceed with FHIR cleanup.
-      if (error instanceof RectangleHealthApiError && error.status === 404) {
-        console.warn('RH reports payment_token ' + paymentMethodId + ' already absent; proceeding with FHIR cleanup');
+      // 404 means the instrument is already gone — proceed with FHIR cleanup.
+      if (error instanceof FinixApiError && error.status === 404) {
+        console.warn(
+          'Finix reports payment_instrument ' + paymentMethodId + ' already absent; proceeding with FHIR cleanup'
+        );
       } else {
         throw error;
       }
     }
 
-    // Promote the next remaining RH identifier to default if the removed one was default.
-    const remaining = rhIdentifiers.filter((id) => id.value !== paymentMethodId);
+    // Promote the next remaining Finix identifier to default if the removed one was default.
+    const remaining = finixIdentifiers.filter((id) => id.value !== paymentMethodId);
     if (wasDefault && remaining.length > 0) {
-      remaining[0] = { ...remaining[0], use: RH_PAYMENT_TOKEN_USE_DEFAULT };
+      remaining[0] = { ...remaining[0], use: FINIX_PAYMENT_INSTRUMENT_USE_DEFAULT };
     }
-    const otherIdentifiers = (account.identifier ?? []).filter((id) => !isRectangleHealthPaymentTokenIdentifier(id));
+    const otherIdentifiers = (account.identifier ?? []).filter((id) => !isFinixPaymentInstrumentIdentifier(id));
     const nextIdentifiers = [...otherIdentifiers, ...remaining];
 
     await oystehr.fhir.patch<Account>({
@@ -81,7 +84,7 @@ export const index = wrapHandler(
       operations: buildAccountIdentifierPatchOperations(account, nextIdentifiers),
     });
 
-    const response: RHPaymentMethodDeleteZambdaOutput = {};
+    const response: FinixPaymentMethodDeleteZambdaOutput = {};
     return lambdaResponse(200, response);
   }
 );

@@ -2,7 +2,7 @@ import Oystehr, { SearchParam } from '@oystehr/sdk';
 import { PaymentNotice } from 'fhir/r4b';
 import { DateTime } from 'luxon';
 import { CashPaymentDTO, convertPaymentNoticeListToCashPaymentDTOs, PatientPaymentDTO } from 'utils';
-import { RH_PAYMENT_ID_SYSTEM } from '../../shared';
+import { FINIX_TRANSFER_ID_SYSTEM } from '../../shared';
 
 interface GetPaymentsForEncounterInput {
   oystehrClient: Oystehr;
@@ -15,10 +15,10 @@ interface GetPaymentsForPatientInput {
   encounterId?: string;
 }
 
-const buildRhCardPaymentsFromNotices = (paymentNotices: PaymentNotice[]): PatientPaymentDTO[] => {
+const buildFinixCardPaymentsFromNotices = (paymentNotices: PaymentNotice[]): PatientPaymentDTO[] => {
   return paymentNotices.flatMap((paymentNotice) => {
-    const rhTransactionId = paymentNotice.identifier?.find((id) => id.system === RH_PAYMENT_ID_SYSTEM)?.value;
-    if (!rhTransactionId) {
+    const finixTransferId = paymentNotice.identifier?.find((id) => id.system === FINIX_TRANSFER_ID_SYSTEM)?.value;
+    if (!finixTransferId) {
       return [];
     }
     const dateISO = DateTime.fromISO(paymentNotice.created).toISO();
@@ -28,7 +28,7 @@ const buildRhCardPaymentsFromNotices = (paymentNotices: PaymentNotice[]): Patien
     return [
       {
         paymentMethod: 'card' as const,
-        rhTransactionId,
+        finixTransferId,
         amountInCents: Math.round((paymentNotice.amount.value ?? 0) * 100),
         fhirPaymentNotificationId: paymentNotice.id,
         dateISO,
@@ -38,7 +38,7 @@ const buildRhCardPaymentsFromNotices = (paymentNotices: PaymentNotice[]): Patien
 };
 
 const buildPaymentDTOs = (fhirPaymentNotices: PaymentNotice[], encounterId?: string): PatientPaymentDTO[] => {
-  const cardPayments = buildRhCardPaymentsFromNotices(fhirPaymentNotices).slice(0, 20);
+  const cardPayments = buildFinixCardPaymentsFromNotices(fhirPaymentNotices).slice(0, 20);
 
   const cashPayments: CashPaymentDTO[] = convertPaymentNoticeListToCashPaymentDTOs(fhirPaymentNotices, encounterId);
 

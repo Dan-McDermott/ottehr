@@ -22,35 +22,35 @@ import {
 import { useQueryClient } from '@tanstack/react-query';
 import { FC, ReactElement, ReactNode, useState } from 'react';
 import { CreditCardBrandIcon } from 'ui-components';
-import { RHCreditCardInfo } from 'utils';
-import { useDeleteRHPaymentMethod } from '../hooks/useDeleteRHPaymentMethod';
-import { RH_PAYMENT_METHODS_QUERY_KEY, useGetRHPaymentMethods } from '../hooks/useGetRHPaymentMethods';
-import { useSetDefaultRHPaymentMethod } from '../hooks/useSetDefaultRHPaymentMethod';
+import { FinixCreditCardInfo } from 'utils';
+import { useDeleteFinixPaymentMethod } from '../hooks/useDeleteRHPaymentMethod';
+import { FINIX_PAYMENT_METHODS_QUERY_KEY, useGetFinixPaymentMethods } from '../hooks/useGetRHPaymentMethods';
+import { useSetDefaultFinixPaymentMethod } from '../hooks/useSetDefaultRHPaymentMethod';
 
-export interface RHAddCardFormProps {
+export interface FinixAddCardFormProps {
   patientId: string;
   onCardAdded: () => void;
   onCancel: () => void;
 }
 
-export interface RHCardManagementProps {
+export interface FinixCardManagementProps {
   patientId: string | undefined;
   /**
-   * Slot for the W2.1 CipherPay-encrypted Add-card form. The component opens
-   * a dialog and renders this content; the form is responsible for invoking
+   * Slot for the Finix Hosted Fields Add-card form. The component opens a
+   * dialog and renders this content; the form is responsible for invoking
    * onCardAdded after successful submission.
    */
-  renderAddCardForm?: (props: RHAddCardFormProps) => ReactNode;
+  renderAddCardForm?: (props: FinixAddCardFormProps) => ReactNode;
   title?: string;
 }
 
-const formatCardLabel = (card: RHCreditCardInfo): string => {
+const formatCardLabel = (card: FinixCreditCardInfo): string => {
   const formattedBrand = card.brand ? card.brand.charAt(0).toUpperCase() + card.brand.slice(1) : 'Card';
   const last = card.last4 ? ' •••• ' + card.last4 : '';
   return formattedBrand + last;
 };
 
-export const RHCardManagement: FC<RHCardManagementProps> = ({
+export const FinixCardManagement: FC<FinixCardManagementProps> = ({
   patientId,
   renderAddCardForm,
   title = 'Cards on file',
@@ -59,10 +59,10 @@ export const RHCardManagement: FC<RHCardManagementProps> = ({
   const [errorMessage, setErrorMessage] = useState<string | undefined>(undefined);
   const [addOpen, setAddOpen] = useState(false);
 
-  const { data, isLoading, isFetching, refetch } = useGetRHPaymentMethods({ patientId });
+  const { data, isLoading, isFetching, refetch } = useGetFinixPaymentMethods({ patientId });
 
-  const { mutate: setDefault, isPending: isSettingDefault } = useSetDefaultRHPaymentMethod(patientId);
-  const { mutate: deleteCard, isPending: isDeleting } = useDeleteRHPaymentMethod(patientId);
+  const { mutate: setDefault, isPending: isSettingDefault } = useSetDefaultFinixPaymentMethod(patientId);
+  const { mutate: deleteCard, isPending: isDeleting } = useDeleteFinixPaymentMethod(patientId);
 
   const cards = data?.cards ?? [];
 
@@ -70,7 +70,7 @@ export const RHCardManagement: FC<RHCardManagementProps> = ({
     setDefault({
       paymentMethodId,
       onSuccess: () => {
-        void queryClient.invalidateQueries({ queryKey: [RH_PAYMENT_METHODS_QUERY_KEY, patientId] });
+        void queryClient.invalidateQueries({ queryKey: [FINIX_PAYMENT_METHODS_QUERY_KEY, patientId] });
       },
       onError: () => setErrorMessage('Unable to set default card. Please try again.'),
     });
@@ -80,13 +80,13 @@ export const RHCardManagement: FC<RHCardManagementProps> = ({
     deleteCard({
       paymentMethodId,
       onSuccess: () => {
-        void queryClient.invalidateQueries({ queryKey: [RH_PAYMENT_METHODS_QUERY_KEY, patientId] });
+        void queryClient.invalidateQueries({ queryKey: [FINIX_PAYMENT_METHODS_QUERY_KEY, patientId] });
       },
       onError: () => setErrorMessage('Unable to remove card. Please try again.'),
     });
   };
 
-  const renderCard = (card: RHCreditCardInfo): ReactElement => (
+  const renderCard = (card: FinixCreditCardInfo): ReactElement => (
     <ListItem
       key={card.id}
       secondaryAction={

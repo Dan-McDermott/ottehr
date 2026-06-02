@@ -5,7 +5,7 @@ export interface CardPaymentDTO {
   fhirPaymentNotificationId: string;
   cardBrand?: string;
   cardLast4?: string;
-  rhTransactionId?: string;
+  finixTransferId?: string;
   description?: string;
 }
 
@@ -115,19 +115,19 @@ interface CashPayment {
   description?: string;
 }
 
-// Rectangle Health card-not-present charges. Either the browser produced
-// `encryptedCardData` (one-time card via CipherPay client-side encryption) or
-// the EHR is reusing a stored Card-on-File `paymentToken` (token_reference
-// returned by the Services /api/v1/payment_token endpoint).
-interface RectangleHealthCardPayment {
-  paymentMethod: 'rh-card';
+// Finix card-not-present charges. Either the browser produced a single-use
+// `token` (one-time card via Finix.js Hosted Fields) or the EHR is reusing a
+// stored Finix Payment Instrument id (`paymentInstrumentId`, persisted on the
+// patient's Account as a saved card).
+interface FinixCardPayment {
+  paymentMethod: 'finix-card';
   amountInCents: number;
-  encryptedCardData?: string;
-  paymentToken?: string;
+  token?: string;
+  paymentInstrumentId?: string;
   description?: string;
 }
 
-export type CashOrCardPayment = CardPayment | CashPayment | RectangleHealthCardPayment;
+export type CashOrCardPayment = CardPayment | CashPayment | FinixCardPayment;
 
 export interface PostPatientPaymentInput {
   patientId: string;

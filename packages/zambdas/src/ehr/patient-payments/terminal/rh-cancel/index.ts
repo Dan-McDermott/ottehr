@@ -8,17 +8,14 @@ export interface RHTerminalCancelInput {
   transactionId: string;
 }
 
-// Rectangle Health v3 (Card-Present) does not expose a public endpoint to cancel
-// an in-flight terminal transaction; cancellation must be performed at the
-// physical device. This zambda always returns a clear "not supported" error so
-// the EHR can surface a meaningful message to staff.
+// DEFERRED: Finix card-present terminal payments are not yet configured, so
+// there is no in-flight terminal transaction to cancel. Route kept registered
+// to return a clear, structured response to the EHR.
 export const index = wrapHandler(ZAMBDA_NAME, async (input: ZambdaInput): Promise<APIGatewayProxyResult> => {
   validateRequestParameters(input);
   return lambdaResponse(501, {
-    code: 'rh-terminal-cancel-not-supported',
-    message:
-      'Rectangle Health v3 Card-Present transactions cannot be cancelled remotely. ' +
-      'Cancel the operation directly on the physical terminal device.',
+    code: 'finix-terminal-not-implemented',
+    message: 'Finix card-present terminal payments are not yet configured; there is no terminal action to cancel.',
   });
 });
 

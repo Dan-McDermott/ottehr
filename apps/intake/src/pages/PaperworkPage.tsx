@@ -18,7 +18,7 @@ import { t } from 'i18next';
 import { FC, ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Navigate, Outlet, useLocation, useNavigate, useParams } from 'react-router-dom';
-import { useGetRHPaymentMethods } from 'src/telemed/features/paperwork';
+import { useGetFinixPaymentMethods } from 'src/telemed/features/paperwork';
 import {
   APIError,
   ComplexValidationResult,
@@ -217,7 +217,7 @@ export const PaperworkHome: FC = () => {
     data: rhCardData,
     isFetching: rhCardsAreLoading,
     refetch: refetchRHPaymentMethods,
-  } = useGetRHPaymentMethods({
+  } = useGetFinixPaymentMethods({
     patientId: patient?.id,
   });
 

@@ -14,14 +14,15 @@ import {
   TIMEZONES,
 } from 'utils';
 import {
+  createFinixClient,
   createOystehrClient,
-  createRectangleHealthClient,
+  FINIX_TRANSFER_ID_SYSTEM,
   getAuth0Token,
   getEntityForEncounter,
   getUser,
   lambdaResponse,
-  makeBusinessIdentifierForRectangleHealthPayment,
-  RH_PAYMENT_ID_SYSTEM,
+  makeBusinessIdentifierForFinixTransfer,
+  mapFinixTransferState,
   wrapHandler,
   ZambdaInput,
 } from '../../../shared';
@@ -61,29 +62,36 @@ export const index = wrapHandler(ZAMBDA_NAME, async (input: ZambdaInput): Promis
     throw FHIR_RESOURCE_NOT_FOUND('PaymentNotice');
   }
 
-  const transactionId = originalNotice.identifier?.find((id) => id.system === RH_PAYMENT_ID_SYSTEM)?.value;
+  const transactionId = originalNotice.identifier?.find((id) => id.system === FINIX_TRANSFER_ID_SYSTEM)?.value;
   if (!transactionId) {
-    throw INVALID_INPUT_ERROR(
-      `PaymentNotice/${paymentNoticeId} has no Rectangle Health transaction identifier; refund unsupported.`
-    );
+    throw INVALID_INPUT_ERROR(`PaymentNotice/${paymentNoticeId} has no Finix transfer identifier; refund unsupported.`);
   }
 
   const entity = await getEntityForEncounter(encounterId, oystehrClient);
-  const rhClient = createRectangleHealthClient(secrets, entity);
-  const refundAmount = (amountInCents / 100).toFixed(2);
+  const finixClient = createFinixClient(secrets, entity);
 
-  const refundResponse = await rhClient.refund({
-    transaction_id: transactionId,
-    refund_amount: refundAmount,
-    refund_reason: reason,
+  const reversal = await finixClient.refund({
+    transferId: transactionId,
+    amountInCents,
+    tags: reason ? { reason } : undefined,
   });
+  const reversalStatus = mapFinixTransferState(reversal.state);
+  // Finix reversals start PENDING and settle to SUCCEEDED asynchronously; treat
+  // anything not explicitly declined/failed as accepted.
+  if (reversalStatus === 'declined') {
+    throw new Error(
+      `Finix refund declined (state=${reversal.state ?? 'unknown'}): ${
+        reversal.failure_message ?? reversal.failure_code ?? 'no failure detail'
+      }`
+    );
+  }
 
-  const refundTransactionId = refundResponse.transaction_id ?? transactionId;
+  const refundTransactionId = reversal.id ?? transactionId;
   const dateTimeIso = DateTime.now().toISO() || '';
   const refundNotice = makeRefundPaymentNotice({
     encounterId,
     amountInCents,
-    rhTransactionId: refundTransactionId,
+    finixTransferId: refundTransactionId,
     submitterRef: { reference: user.profile },
     recipientRef: originalNotice.recipient,
     dateTimeIso,
@@ -126,7 +134,7 @@ const validateRequestParameters = (input: ZambdaInput): RefundPatientPaymentInpu
 interface RefundNoticeInput {
   encounterId: string;
   amountInCents: number;
-  rhTransactionId: string;
+  finixTransferId: string;
   submitterRef: Reference;
   recipientRef?: Reference;
   dateTimeIso: string;
@@ -134,7 +142,7 @@ interface RefundNoticeInput {
 }
 
 const makeRefundPaymentNotice = (input: RefundNoticeInput): PaymentNotice => {
-  const { encounterId, amountInCents, rhTransactionId, submitterRef, recipientRef, dateTimeIso, reason } = input;
+  const { encounterId, amountInCents, finixTransferId, submitterRef, recipientRef, dateTimeIso, reason } = input;
   const paymentDate = DateTime.fromISO(dateTimeIso).setZone(TIMEZONES[0]).toFormat('yyyy-MM-dd');
   const created = DateTime.fromISO(dateTimeIso).toUTC().toISO();
   if (!created) throw new Error('Invalid dateTimeIso provided for refund PaymentNotice creation');
@@ -144,9 +152,7 @@ const makeRefundPaymentNotice = (input: RefundNoticeInput): PaymentNotice => {
     id: 'contained-reconciliation',
     status: 'active',
     created,
-    disposition: reason
-      ? `card refund processed by Rectangle Health: ${reason}`
-      : 'card refund processed by Rectangle Health',
+    disposition: reason ? `card refund processed by Finix: ${reason}` : 'card refund processed by Finix',
     outcome: 'complete',
     paymentDate,
     paymentAmount: refundAmount,
@@ -157,7 +163,7 @@ const makeRefundPaymentNotice = (input: RefundNoticeInput): PaymentNotice => {
       },
     ],
   };
-  const identifier: Identifier = makeBusinessIdentifierForRectangleHealthPayment(rhTransactionId);
+  const identifier: Identifier = makeBusinessIdentifierForFinixTransfer(finixTransferId);
   const notice: PaymentNotice = {
     resourceType: 'PaymentNotice',
     status: 'active',
@@ -165,10 +171,10 @@ const makeRefundPaymentNotice = (input: RefundNoticeInput): PaymentNotice => {
     created,
     amount: refundAmount,
     contained: [reconciliation],
-    extension: [{ url: PAYMENT_METHOD_EXTENSION_URL, valueString: 'rh-card' }],
+    extension: [{ url: PAYMENT_METHOD_EXTENSION_URL, valueString: 'finix-card' }],
     payment: { reference: `#${reconciliation.id}` },
     identifier: [identifier],
-    recipient: recipientRef ?? { display: 'Rectangle Health' },
+    recipient: recipientRef ?? { display: 'Finix' },
   };
   return notice;
 };

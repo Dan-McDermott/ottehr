@@ -1,9 +1,9 @@
-import { isValidUUID, NOT_AUTHORIZED, RHPaymentMethodDeleteParameters, Secrets } from 'utils';
+import { FinixPaymentMethodDeleteParameters, isValidUUID, NOT_AUTHORIZED, Secrets } from 'utils';
 import { ZambdaInput } from '../../../../shared';
 
 export function validateRequestParameters(
   input: ZambdaInput
-): RHPaymentMethodDeleteParameters & { secrets: Secrets | null; authorization: string } {
+): FinixPaymentMethodDeleteParameters & { secrets: Secrets | null; authorization: string } {
   const authorization = input.headers.Authorization;
   if (!authorization) {
     throw NOT_AUTHORIZED;
